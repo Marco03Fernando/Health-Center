@@ -1,5 +1,5 @@
-const HealthCenter = require('../models/HealthCenter');
-const AppointmentSlot = require('../models/AppoinmentSlot');
+const HealthCenter = require('../../models/HealthCenter');
+const AppointmentSlot = require('../../models/AppoinmentSlot');
 
 async function generateAppointmentSlots(req, res) {
   try {
@@ -104,6 +104,5 @@ async function generateAppointmentSlots(req, res) {
     return res.status(500).json({ error: 'Internal server error', details: err.message });
   }
 }
-
 
 module.exports = { generateAppointmentSlots };
