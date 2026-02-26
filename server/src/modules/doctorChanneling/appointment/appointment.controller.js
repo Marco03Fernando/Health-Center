@@ -1,76 +1,137 @@
-const appointmentService = require("./appointment.service");
+const mongoose = require("mongoose");
+const Appointment = require("./appointment.model");
+const Slot = require("../slot/slot.model");
+const Doctor = require("../doctor/doctor.model");
+const ApiError = require("../../../utils/ApiError");
 
-// POST /api/appointments
 async function create(req, res, next) {
   try {
-    const appt = await appointmentService.createAppointment(req.body);
+    const { centerId, doctorId, slotId, userId, note } = req.body;
+
+    if (!centerId || !doctorId || !slotId || !userId) {
+      throw new ApiError(400, "centerId, doctorId, slotId, userId are required");
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new ApiError(400, "Invalid userId");
+    }
+
+    const doctor = await Doctor.findById(doctorId);
+    if (!doctor) throw new ApiError(404, "Doctor not found");
+    if (String(doctor.centerId) !== String(centerId)) {
+      throw new ApiError(400, "Doctor does not belong to this center");
+    }
+
+    const slot = await Slot.findOneAndUpdate(
+      { _id: slotId, doctorId, centerId, isBooked: false },
+      { $set: { isBooked: true } },
+      { new: true }
+    );
+
+    if (!slot) {
+      throw new ApiError(409, "Slot not available or already booked");
+    }
+
+    const amount = Number(doctor.fee || 0);
+
+    const appt = await Appointment.create({
+      centerId,
+      doctorId,
+      userId,
+      slotId,
+      note: note || "",
+      status: "pending",
+      statusUpdatedAt: new Date(),
+      statusUpdatedBy: "patient",
+      payment: {
+        status: "unpaid",
+        method: "cash",
+        amount,
+        currency: "LKR",
+      },
+    });
+
     return res.status(201).json({ success: true, data: appt });
   } catch (err) {
     next(err);
   }
 }
 
-// GET /api/appointments/user/:userId
+// User appointment list
 async function listByUser(req, res, next) {
   try {
     const { userId } = req.params;
-    const items = await appointmentService.listUserAppointments(userId);
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new ApiError(400, "Invalid userId");
+    }
+
+    const items = await Appointment.find({ userId })
+      .populate("doctorId", "name specialization clinic fee")
+      .populate("centerId", "name district")
+      .populate("slotId", "date startTime endTime")
+      .sort({ createdAt: -1 });
+
     return res.json({ success: true, data: items });
   } catch (err) {
     next(err);
   }
 }
 
-// PATCH /api/appointments/:id/cancel?userId=...
+// Cancel appointment
 async function cancel(req, res, next) {
   try {
     const { userId } = req.query;
     if (!userId) {
       return res.status(400).json({ success: false, message: "userId is required in query" });
     }
-    const appt = await appointmentService.cancelUserAppointment(userId, req.params.id);
+
+    const appt = await Appointment.findOne({ _id: req.params.id, userId });
+    if (!appt) throw new ApiError(404, "Appointment not found");
+
+    if (["completed", "no_show"].includes(appt.status)) {
+      throw new ApiError(400, "Cannot cancel a completed/no-show appointment");
+    }
+
+    appt.status = "cancelled";
+    appt.statusUpdatedAt = new Date();
+    appt.statusUpdatedBy = "patient";
+    await appt.save();
+
+    // Free slot
+    await Slot.updateOne({ _id: appt.slotId }, { $set: { isBooked: false } });
+
     return res.json({ success: true, data: appt });
   } catch (err) {
     next(err);
   }
 }
 
-// PATCH /api/appointments/:id/pay
+// Mark appointment as paid
 async function pay(req, res, next) {
   try {
-    const { method } = req.body; // cash/card/online
-    const appt = await appointmentService.markAppointmentPaid({
-      appointmentId: req.params.id,
-      method,
-    });
-    return res.json({ success: true, data: appt });
-  } catch (err) {
-    next(err);
-  }
-}
+    const { method } = req.body;
+    const appt = await Appointment.findById(req.params.id);
+    if (!appt) throw new ApiError(404, "Appointment not found");
 
-// OPTIONAL doctor testing routes (only if your service still exports these)
-async function listByDoctor(req, res, next) {
-  try {
-    const { doctorId } = req.params;
-    const items = await appointmentService.listDoctorAppointmentsByDoctorId
-      ? appointmentService.listDoctorAppointmentsByDoctorId(doctorId, req.query)
-      : appointmentService.listDoctorAppointments(req.query.authUserId, req.query);
-    return res.json({ success: true, data: items });
-  } catch (err) {
-    next(err);
-  }
-}
+    if (appt.status === "cancelled") throw new ApiError(400, "Cannot pay for a cancelled appointment");
+    if (appt.status === "no_show") throw new ApiError(400, "Cannot pay for a no-show appointment");
 
-async function doctorUpdateStatus(req, res, next) {
-  try {
-    const { doctorId, id } = req.params;
-    const { status } = req.body;
+    if (appt.payment?.status === "paid") {
+      throw new ApiError(400, "Appointment is already paid");
+    }
 
-    const appt = await appointmentService.updateAppointmentStatusByDoctorId
-      ? appointmentService.updateAppointmentStatusByDoctorId(doctorId, id, status)
-      : appointmentService.updateAppointmentStatusByDoctor(req.body.authUserId, id, status);
+    appt.payment.status = "paid";
+    appt.payment.method = method || appt.payment.method || "cash";
+    appt.payment.paidAt = new Date();
+    appt.payment.paidBy = "receptionist";
 
+    if (appt.status === "pending") appt.status = "confirmed";
+
+    appt.statusUpdatedAt = new Date();
+    appt.statusUpdatedBy = "receptionist";
+
+    await appt.save();
     return res.json({ success: true, data: appt });
   } catch (err) {
     next(err);
@@ -82,6 +143,4 @@ module.exports = {
   listByUser,
   cancel,
   pay,
-  listByDoctor,
-  doctorUpdateStatus,
 };

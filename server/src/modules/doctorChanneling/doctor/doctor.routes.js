@@ -3,17 +3,16 @@ const doctorController = require("../doctor/doctor.controller");
 
 const router = express.Router();
 
-// CRUD
-router.post("/", doctorController.create);
+// CRUD operations for doctor management
+router.post("/", doctorController.create);  // Create a new doctor
 
-// List for channeling UI:
-// /api/doctors?centerId=...&specialization=...&clinic=...&q=...&isActive=true&page=1&limit=20
-router.get("/", doctorController.list);
+// List doctors with filters for channeling UI
+router.get("/", doctorController.list);    // Get a list of doctors with query parameters
 
-router.get("/:id", doctorController.getById);
-router.patch("/:id", doctorController.update);
+router.get("/:id", doctorController.getById);   // Get a specific doctor by ID
+router.patch("/:id", doctorController.update);  // Update doctor details
 
-// Activate/deactivate
+// Activate or deactivate the doctor
 router.patch("/:id/active", doctorController.setActive);
 
 module.exports = router;
