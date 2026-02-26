@@ -16,6 +16,8 @@ app.use(appointmentRoutes);
 const medicationInventoryRoutes = require("./src/routes/medicationInventoryRoutes");
 app.use("/api/medication-inventory", medicationInventoryRoutes);
 
+const pharmacyOrderRoutes = require("./src/routes/pharmacyOrderRoutes");
+app.use("/api/pharmacy-orders", pharmacyOrderRoutes);
 
 app.get("/", (req, res) => {
   res.send("Diagnostic Booking API running 🚀");
