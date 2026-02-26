@@ -3,11 +3,13 @@ import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
 import AppointmentsPage from "./pages/AppointmentsPage";
 import UpdateResultsPage from "./pages/UpdateResultsPage";
 import AddTestPage from "./pages/AddTestPage";
+import AvailableTestsPage from "./pages/AvailableTestsPage";
 
 const navItems = [
   { to: "/", label: "Appointments", icon: "📋" },
   { to: "/update-results", label: "Update Results", icon: "🔬" },
   { to: "/add-test", label: "Add Test", icon: "➕" },
+  { to: "/available-tests", label: "Available Tests", icon: "🧪" },
 ];
 
 function App() {
@@ -31,7 +33,7 @@ function App() {
           }`}
         >
           <div className="p-5 border-b border-sidebar-border">
-            <h1 className="text-lg font-bold text-sidebar-primary-foreground tracking-tight">🏥 Lab Dashboard</h1>
+            <h1 className="text-lg font-bold text-sidebar-primary-foreground tracking-tight">Lab Dashboard</h1>
             <p className="text-xs text-sidebar-foreground/60 mt-0.5">Healthcare Diagnostics</p>
           </div>
 
@@ -80,6 +82,7 @@ function App() {
               <Route path="/" element={<AppointmentsPage />} />
               <Route path="/update-results" element={<UpdateResultsPage />} />
               <Route path="/add-test" element={<AddTestPage />} />
+              <Route path="/available-tests" element={<AvailableTestsPage />} />
             </Routes>
           </main>
         </div>
