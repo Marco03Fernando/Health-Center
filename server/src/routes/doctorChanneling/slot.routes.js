@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const Slot = require("./slot.model");
+const Slot = require("../../models/doctorChanneling/slot.model");
 
 // GET /api/slots?doctorId=...&date=YYYY-MM-DD
 router.get("/", async (req, res, next) => {

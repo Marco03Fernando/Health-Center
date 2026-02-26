@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
-const Appointment = require("./appointment.model");
-const Slot = require("../slot/slot.model");
-const Doctor = require("../doctor/doctor.model");
-const ApiError = require("../../../utils/ApiError");
+const Appointment = require("../../models/doctorChanneling/appointment.model");
+const Slot = require("../../models/doctorChanneling/slot.model");
+const Doctor = require("../../models/doctorChanneling/doctor.model");
+const ApiError = require("../../utils/ApiError");
 
 async function create(req, res, next) {
   try {

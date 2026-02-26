@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const controller = require("./appointment.controller");
+const controller = require("../../controllers/doctorChanneling/appointment.controller");
 
 // Booking (no login yet)
 router.post("/", controller.create);

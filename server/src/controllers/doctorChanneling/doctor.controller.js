@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const Doctor = require("./doctor.model");
+const Doctor = require("../../models/doctorChanneling/doctor.model");
 
 function assertObjectId(id, name = "id") {
     if (!mongoose.Types.ObjectId.isValid(id)) {
