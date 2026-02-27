@@ -4,8 +4,8 @@ const doctorSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     specialization: { type: String, required: true, trim: true },
-    clinic: { type: String, required: true, trim: true }, 
-    fee: { type: Number, required: true, min: 0 },        
+    clinic: { type: String, required: true, trim: true },
+    fee: { type: Number, required: true, min: 0 },
     phone: { type: String, required: true, trim: true },
 
     centerId: {
@@ -14,13 +14,14 @@ const doctorSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    
-    isActive: {type: Boolean, default: true, index: true}
 
+    startTime: { type: String, trim: true }, // "09:00"
+    endTime: { type: String, trim: true },   // "11:00"
+    sessionTime: { type: Number, min: 1 },   // 15 (minutes)
 
+    isActive: { type: Boolean, default: true, index: true },
   },
   { timestamps: true }
-
 );
 
 doctorSchema.index({ centerId: 1, isActive: 1, specialization: 1 });
