@@ -22,6 +22,13 @@ const orderItemSchema = new mongoose.Schema(
     },
 
     requestedQty: { type: Number, required: true, min: 1 },
+
+    // ✅ NEW (for WAITING_STOCK emails / tracking)
+    // how much is currently available at order time (can be 0)
+    availableQty: { type: Number, default: 0, min: 0 },
+    // how much is missing (requestedQty - availableQty)
+    shortageQty: { type: Number, default: 0, min: 0 },
+
     instructions: { type: String, default: "" },
 
     nameSnapshot: { type: String, required: true },

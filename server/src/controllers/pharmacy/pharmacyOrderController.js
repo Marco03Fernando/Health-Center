@@ -2,6 +2,9 @@ const mongoose = require("mongoose");
 const PharmacyOrder = require("../../models/pharmacyOrder");
 const MedicationInventory = require("../../models/medicationInventory");
 
+// ✅ Email utility (make sure this file exists)
+const sendInvoiceEmail = require("../../utils/sendInvoiceEmail");
+
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 const makeOrderNo = () => {
@@ -16,46 +19,51 @@ const sortBatchesFIFO = (batches) =>
     .filter((b) => toNum(b.quantity) > 0)
     .sort((a, b) => new Date(a.expiryDate) - new Date(b.expiryDate));
 
-const createWaitingItems = (med, requestedQty, instructions) => [
-  {
-    medicationId: med._id,
-    requestedQty,
-    instructions: instructions || "",
-    nameSnapshot: med.name,
-    strengthSnapshot: med.strength,
-    brandNameSnapshot: med.brandName || "",
-    formSnapshot: med.form || "",
-    unitSnapshot: med.unit || "",
-    allocations: [],
-    itemTotal: 0,
-  },
-];
+const createWaitingItem = (med, requestedQty, availableQty, instructions) => ({
+  medicationId: med._id,
+  requestedQty,
+  availableQty,
+  shortageQty: Math.max(0, requestedQty - availableQty),
+  instructions: instructions || "",
+  nameSnapshot: med.name,
+  strengthSnapshot: med.strength,
+  brandNameSnapshot: med.brandName || "",
+  formSnapshot: med.form || "",
+  unitSnapshot: med.unit || "",
+  allocations: [],
+  itemTotal: 0,
+});
 
+/**
+ * ✅ UPDATED:
+ * - Builds a full plan if ALL items available
+ * - Otherwise returns waiting = true with ALL out-of-stock items collected
+ */
 const buildPlannedItems = async (items, session) => {
   const plannedItems = [];
   let subtotal = 0;
+
+  const waitingItems = [];
+  let totalNeededShortage = 0;
 
   for (const it of items) {
     const med = await MedicationInventory.findById(it.medicationId).session(session);
     if (!med) return { error: { status: 404, message: "Medication not found" } };
 
     const requestedQty = Number(it.qty);
-
     const batches = sortBatchesFIFO(med.batches);
     const totalAvailable = batches.reduce((sum, b) => sum + toNum(b.quantity), 0);
 
+    // ✅ Collect shortages instead of returning immediately
     if (totalAvailable < requestedQty) {
-      return {
-        waiting: true,
-        waitingInfo: {
-          needed: requestedQty,
-          available: totalAvailable,
-          medicationId: med._id,
-          waitingItems: createWaitingItems(med, requestedQty, it.instructions),
-        },
-      };
+      const shortage = requestedQty - totalAvailable;
+      totalNeededShortage += shortage;
+
+      waitingItems.push(createWaitingItem(med, requestedQty, totalAvailable, it.instructions));
+      continue; // keep checking next items too
     }
 
+    // Build allocations if available
     let remaining = requestedQty;
     const allocations = [];
     let itemTotal = 0;
@@ -96,6 +104,17 @@ const buildPlannedItems = async (items, session) => {
     });
   }
 
+  // ✅ If any shortage exists -> waiting mode with ALL waiting items
+  if (waitingItems.length > 0) {
+    return {
+      waiting: true,
+      waitingInfo: {
+        waitingItems,
+        shortageTotal: totalNeededShortage,
+      },
+    };
+  }
+
   return { plannedItems, subtotal };
 };
 
@@ -107,9 +126,7 @@ const applyDeductions = async (plannedItems, session) => {
     for (const alloc of pItem.allocations) {
       const batch = med.batches.id(alloc.batchId);
       if (!batch) {
-        return {
-          error: { status: 404, message: "Batch not found (during deduction)" },
-        };
+        return { error: { status: 404, message: "Batch not found (during deduction)" } };
       }
 
       const currentQty = toNum(batch.quantity);
@@ -137,18 +154,13 @@ const applyDeductions = async (plannedItems, session) => {
 };
 
 const restorePreviousDeductions = async (order, session) => {
-  // Restore only if the order had allocations (usually CONFIRMED)
   for (const item of order.items || []) {
     for (const alloc of item.allocations || []) {
       const med = await MedicationInventory.findById(item.medicationId).session(session);
-      if (!med) {
-        return { error: { status: 404, message: "Medication not found (during restore)" } };
-      }
+      if (!med) return { error: { status: 404, message: "Medication not found (during restore)" } };
 
       const batch = med.batches.id(alloc.batchId);
-      if (!batch) {
-        return { error: { status: 404, message: "Batch not found (during restore)" } };
-      }
+      if (!batch) return { error: { status: 404, message: "Batch not found (during restore)" } };
 
       batch.quantity = toNum(batch.quantity) + toNum(alloc.qty);
       await med.save({ session });
@@ -193,9 +205,8 @@ const createOrder = async (req, res) => {
         return res.status(built.error.status).json({ message: built.error.message });
       }
 
+      // ✅ WAITING_STOCK (now includes ALL shortage items)
       if (built.waiting) {
-        const med = await MedicationInventory.findById(built.waitingInfo.medicationId).session(session);
-
         const waitingOrder = await PharmacyOrder.create(
           [
             {
@@ -203,7 +214,7 @@ const createOrder = async (req, res) => {
               patient,
               prescriptionTextSnapshot,
               status: "WAITING_STOCK",
-              items: built.waitingInfo.waitingItems,
+              items: built.waitingInfo.waitingItems, // ✅ ALL waiting items
               subtotal: 0,
               total: 0,
             },
@@ -214,14 +225,26 @@ const createOrder = async (req, res) => {
         await session.commitTransaction();
         session.endSession();
 
+        // ✅ Send waiting email too
+        try {
+          await sendInvoiceEmail({
+            to: patient.email,
+            order: waitingOrder[0],
+            mode: "WAITING_STOCK",
+            waitingInfo: built.waitingInfo,
+          });
+        } catch (e) {
+          console.log("Waiting email failed:", e.message);
+        }
+
         return res.status(201).json({
           message: "Order created as WAITING_STOCK due to insufficient stock",
-          needed: built.waitingInfo.needed,
-          available: built.waitingInfo.available,
+          waitingInfo: built.waitingInfo,
           order: waitingOrder[0],
         });
       }
 
+      // ✅ CONFIRMED flow
       const deduct = await applyDeductions(built.plannedItems, session);
       if (deduct.error) {
         await session.abortTransaction();
@@ -247,7 +270,12 @@ const createOrder = async (req, res) => {
       await session.commitTransaction();
       session.endSession();
 
-      console.log(`EMAIL -> ${patient.email} | Order: ${order[0].orderNo} | Total: ${order[0].total}`);
+      // ✅ Send invoice email
+      try {
+        await sendInvoiceEmail({ to: patient.email, order: order[0], mode: "CONFIRMED" });
+      } catch (e) {
+        console.log("Email failed:", e.message);
+      }
 
       return res.status(201).json(order[0]);
     } catch (e) {
@@ -279,7 +307,6 @@ const getOrderById = async (req, res) => {
   }
 };
 
-// update patient/prescription/status only (no stock changes)
 const updateOrder = async (req, res) => {
   try {
     const allowed = {};
@@ -299,10 +326,6 @@ const updateOrder = async (req, res) => {
   }
 };
 
-/**
- * ✅ THIS IS THE IMPORTANT ONE:
- * Update order items (qty/instructions), with full restore + reallocate + re-deduct
- */
 const updateOrderItems = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -336,7 +359,7 @@ const updateOrderItems = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // 1) Restore previous allocations (so inventory goes back)
+    // 1) Restore previous allocations
     const restored = await restorePreviousDeductions(order, session);
     if (restored.error) {
       await session.abortTransaction();
@@ -344,7 +367,7 @@ const updateOrderItems = async (req, res) => {
       return res.status(restored.error.status).json({ message: restored.error.message });
     }
 
-    // 2) Build new plan
+    // 2) Build new plan (now collects all shortages)
     const built = await buildPlannedItems(items, session);
     if (built.error) {
       await session.abortTransaction();
@@ -352,14 +375,14 @@ const updateOrderItems = async (req, res) => {
       return res.status(built.error.status).json({ message: built.error.message });
     }
 
-    // Optional field updates too
+    // Optional field updates
     if (patient) order.patient = patient;
     if (prescriptionTextSnapshot) order.prescriptionTextSnapshot = prescriptionTextSnapshot;
 
-    // 3) If waiting stock -> set WAITING_STOCK and do NOT deduct
+    // 3) WAITING_STOCK: save waiting items and email
     if (built.waiting) {
       order.status = "WAITING_STOCK";
-      order.items = built.waitingInfo.waitingItems;
+      order.items = built.waitingInfo.waitingItems; // ✅ all waiting items
       order.subtotal = 0;
       order.total = 0;
 
@@ -367,15 +390,26 @@ const updateOrderItems = async (req, res) => {
       await session.commitTransaction();
       session.endSession();
 
+      // ✅ Send waiting email
+      try {
+        await sendInvoiceEmail({
+          to: order.patient.email,
+          order,
+          mode: "WAITING_STOCK",
+          waitingInfo: built.waitingInfo,
+        });
+      } catch (e) {
+        console.log("Waiting email failed:", e.message);
+      }
+
       return res.status(200).json({
         message: "Order updated as WAITING_STOCK due to insufficient stock",
-        needed: built.waitingInfo.needed,
-        available: built.waitingInfo.available,
+        waitingInfo: built.waitingInfo,
         order,
       });
     }
 
-    // 4) Apply deductions for the new plan
+    // 4) Apply deductions
     const deduct = await applyDeductions(built.plannedItems, session);
     if (deduct.error) {
       await session.abortTransaction();
@@ -383,7 +417,7 @@ const updateOrderItems = async (req, res) => {
       return res.status(deduct.error.status).json({ message: deduct.error.message, ...deduct.error.extra });
     }
 
-    // 5) Save order with new allocations/totals
+    // 5) Save order confirmed
     order.status = "CONFIRMED";
     order.items = built.plannedItems;
     order.subtotal = built.subtotal;
@@ -394,7 +428,12 @@ const updateOrderItems = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    console.log(`EMAIL -> ${order.patient.email} | Order updated: ${order.orderNo} | Total: ${order.total}`);
+    // ✅ Send confirmed invoice email
+    try {
+      await sendInvoiceEmail({ to: order.patient.email, order, mode: "CONFIRMED" });
+    } catch (e) {
+      console.log("Email failed:", e.message);
+    }
 
     return res.status(200).json(order);
   } catch (err) {
