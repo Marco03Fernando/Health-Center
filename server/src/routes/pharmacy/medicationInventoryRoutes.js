@@ -10,7 +10,7 @@ const {
   addBatch,
   updateBatch,
   deleteBatch,
-} = require("../controllers/pharmacy/medicationInventoryController");
+} = require("../../controllers/pharmacy/medicationInventoryController");
 
 // TEST ROUTE FIRST
 router.get("/test", (req, res) => {

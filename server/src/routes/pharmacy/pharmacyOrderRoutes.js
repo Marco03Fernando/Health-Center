@@ -7,7 +7,7 @@ const {
   getOrderById,
   updateOrder,
   updateOrderItems,
-} = require("../controllers/pharmacy/pharmacyOrderController");
+} = require("../../controllers/pharmacy/pharmacyOrderController");
 
 router.get("/test", (req, res) => res.json({ ok: true }));
 

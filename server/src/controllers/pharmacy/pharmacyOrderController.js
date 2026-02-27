@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
-const PharmacyOrder = require("../../models/pharmacyOrder");
-const MedicationInventory = require("../../models/medicationInventory");
+const PharmacyOrder = require("../../models/pharmacy/pharmacyOrder");
+const MedicationInventory = require("../../models/pharmacy/medicationInventory");
 
 // ✅ Email utility (make sure this file exists)
 const sendInvoiceEmail = require("../../utils/sendInvoiceEmail");

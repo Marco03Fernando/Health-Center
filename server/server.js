@@ -13,10 +13,10 @@ app.use(appointmentSlotRoutes);
 const appointmentRoutes = require("./src/routes/appointmentRoutes");
 app.use(appointmentRoutes);
 
-const medicationInventoryRoutes = require("./src/routes/medicationInventoryRoutes");
+const medicationInventoryRoutes = require("./src/routes/pharmacy/medicationInventoryRoutes");
 app.use("/api/medication-inventory", medicationInventoryRoutes);
 
-const pharmacyOrderRoutes = require("./src/routes/pharmacyOrderRoutes");
+const pharmacyOrderRoutes = require("./src/routes/pharmacy/pharmacyOrderRoutes");
 app.use("/api/pharmacy-orders", pharmacyOrderRoutes);
 
 app.get("/", (req, res) => {

@@ -1,4 +1,4 @@
-const MedicationInventory = require("../../models/medicationInventory");
+const MedicationInventory = require("../../models/pharmacy/medicationInventory");
 
 const createMedication = async (req, res) => {
   try {
