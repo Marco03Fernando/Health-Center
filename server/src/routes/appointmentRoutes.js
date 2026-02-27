@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { createAppointment } = require('../controllers/appointmentsController');
+const { createAppointment } = require('../controllers/appoinment/appointmentsController');
 
 router.post('/api/appointments', createAppointment);
 
