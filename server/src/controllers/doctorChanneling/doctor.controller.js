@@ -249,8 +249,8 @@ async function update(req, res) {
       specialization,
       clinic,
       isActive,
-
-      // ✅ allow updating schedule fields too
+      fee,
+      phone,
       startTime,
       endTime,
       sessionTime,
@@ -264,6 +264,8 @@ async function update(req, res) {
       specialization,
       clinic,
       isActive,
+      fee,
+      phone,
       startTime,
       endTime,
       sessionTime,

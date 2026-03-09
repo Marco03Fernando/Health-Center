@@ -10,13 +10,11 @@ router.post("/", controller.create);
 router.get("/user/:userId", controller.listByUser);
 
 // Cancel appointment (no login yet)
-router.patch("/:id/cancel", controller.cancel);
+router.delete("/:id/cancel", controller.cancel);
 
-// Receptionist payment (no auth yet; later you will protect with receptionist role)
-router.patch("/:id/pay", controller.pay);
+// Receptionist payment 
+//router.patch("/:id/pay", controller.pay);
 
-// OPTIONAL doctor testing without login
-//router.get("/doctor/:doctorId", controller.listByDoctor);
-//router.patch("/doctor/:doctorId/:id/status", controller.doctorUpdateStatus);
+
 
 module.exports = router;

@@ -2,13 +2,16 @@ require("dotenv").config();   // Load environment variables
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
+require("./models/doctorChanneling/user.model");
 const errorMiddleware = require("./middlewares/error.middleware");  // Custom error handler
+
 
 // Routes
 const centerRoutes = require("./routes/doctorChanneling/center.routes");
 const doctorRoutes = require("./routes/doctorChanneling/doctor.routes");
 const slotRoutes = require("./routes/doctorChanneling/slot.routes");
 const appointmentRoutes = require("./routes/doctorChanneling/appointment.routes");
+const prescriptionRoutes = require("./routes/doctorChanneling/prescription.routes");
 
 // Set up Express app
 const app = express();
@@ -39,6 +42,7 @@ app.use("/api/centers", centerRoutes);
 app.use("/api/doctors", doctorRoutes);
 app.use("/api/slots", slotRoutes);
 app.use("/api/appointments", appointmentRoutes);
+app.use("/api/prescriptions", prescriptionRoutes);
 
 // Error handler
 app.use(errorMiddleware);
