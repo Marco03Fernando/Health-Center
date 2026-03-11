@@ -3,10 +3,6 @@ const mongoose = require("mongoose");
 const prescriptionItemSchema = new mongoose.Schema(
   {
     medicineName: { type: String, required: true, trim: true },
-    dosage: { type: String, trim: true },
-    frequency: { type: String, trim: true },
-    duration: { type: String, trim: true },
-    instructions: { type: String, trim: true },
     quantity: { type: Number, min: 1 },
   },
   { _id: false }
@@ -14,7 +10,7 @@ const prescriptionItemSchema = new mongoose.Schema(
 
 const prescriptionSchema = new mongoose.Schema(
   {
-    //  readable number like P0001
+    // Readable number like P0001
     prescriptionNo: { type: String, required: true, unique: true, index: true },
 
     centerId: {

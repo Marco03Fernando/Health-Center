@@ -2,20 +2,22 @@ const express = require("express");
 const router = express.Router();
 
 const controller = require("../../controllers/doctorChanneling/prescription.controller");
+const { protect } = require("../../middlewares/auth.middleware");
+const { allowRoles } = require("../../middlewares/role.middleware"); // Import allowRoles middleware
 
-// Create prescription
-router.post("/", controller.create);
+// Create prescription - doctor only
+router.post("/", protect, allowRoles("doctor"), controller.create);
 
-//  PDF download MUST be before "/:id"
-router.get("/:id/pdf", controller.downloadPdf);
+// PDF download - doctor, patient, pharmacy, and admin
+router.get("/:id/pdf", protect, allowRoles("doctor", "patient", "pharmacy", "admin"), controller.downloadPdf);
 
-// Get one
-router.get("/:id", controller.getById);
+// Get one prescription - doctor, patient, pharmacy, admin
+router.get("/:id", protect, allowRoles("doctor", "patient", "pharmacy", "admin"), controller.getById);
 
-// List
-router.get("/", controller.list);
+// List prescriptions - doctor, pharmacy, admin
+router.get("/", protect, allowRoles("doctor", "pharmacy", "admin"), controller.list);
 
-// Pharmacy dispense
-router.patch("/:id/dispense", controller.markDispensed);
+// Pharmacy dispense - pharmacy only
+router.patch("/:id/dispense", protect, allowRoles("pharmacy", "admin"), controller.markDispensed);
 
 module.exports = router;

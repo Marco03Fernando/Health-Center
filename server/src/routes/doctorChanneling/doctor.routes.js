@@ -1,18 +1,16 @@
 const express = require("express");
 const doctorController = require("../../controllers/doctorChanneling/doctor.controller");
+const { protect } = require("../../middlewares/auth.middleware");
+const { allowRoles } = require("../../middlewares/role.middleware"); // Import allowRoles middleware
 
 const router = express.Router();
 
-// CRUD operations for doctor management
-router.post("/", doctorController.create);  // Create a new doctor
+// Public doctor browsing
+router.get("/", doctorController.list);
+router.get("/:id", doctorController.getById);
 
-// List doctors with filters for channeling UI
-router.get("/", doctorController.list);    // Get a list of doctors with query parameters
-
-router.get("/:id", doctorController.getById);   // Get a specific doctor by ID
-router.patch("/:id", doctorController.update);  // Update doctor details
-
-// Activate or deactivate the doctor
-router.patch("/:id/active", doctorController.setActive);
+// For the logged-in doctor
+router.get("/me", protect, allowRoles("doctor"), doctorController.getMe); // Only doctors can access their profile
+router.patch("/me", protect, allowRoles("doctor"), doctorController.updateProfile); // Only doctors can update their profile
 
 module.exports = router;

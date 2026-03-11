@@ -1,7 +1,10 @@
 const mongoose = require("mongoose");
 const Doctor = require("../../models/doctorChanneling/doctor.model");
 const Slot = require("../../models/doctorChanneling/slot.model");
+const User = require("../../models/doctorChanneling/user.model");
 
+
+// Function to validate ObjectId
 function assertObjectId(id, name = "id") {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     const error = new Error(`Invalid ${name}`);
@@ -58,29 +61,59 @@ function buildSlots({ startTime, endTime, durationMin }) {
 async function create(req, res) {
   try {
     const {
+      // User account fields
+      fullName,
+      email,
+      password,
+      phone,
+
+      // Doctor profile fields
       name,
       centerId,
       specialization,
       clinic,
       fee,
-      phone,
       isActive,
 
-      // ✅ NEW Doctor fields
-      startTime,     // "09:00"
-      endTime,       // "11:00"
-      sessionTime,   // 15
+      // Schedule fields
+      startTime,
+      endTime,
+      sessionTime,
 
-      // OPTIONAL slot-generation inputs
-      date,          // "YYYY-MM-DD"
-      dates,         // ["YYYY-MM-DD", ...]
-      generateSlots, // true/false (optional)
-      regenerate,    // true/false (optional)
-      durationMin,   // also supported
+      // Slot generation
+      date,
+      dates,
+      generateSlots,
+      regenerate,
+      durationMin,
     } = req.body;
 
-    // Create the doctor (now saves schedule fields too)
+    // Basic validations
+    if (!fullName || !email || !password || !phone) {
+      return res.status(400).json({
+        message: "fullName, email, phone and password are required for doctor account creation",
+      });
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "A user with this email already exists" });
+    }
+
+    // 1. Create login account for doctor
+    const user = await User.create({
+      fullName,
+      phone,
+      email,
+      password,
+      role: "doctor",
+      mustChangePassword: true,
+      isActive: isActive ?? true,
+    });
+
+    // 2. Create doctor profile linked to user
     const doctor = await Doctor.create({
+      userId: user._id,
       name,
       centerId,
       specialization,
@@ -94,8 +127,7 @@ async function create(req, res) {
     });
 
     /**
-     * AUTO GENERATE SLOTS (only if request includes required scheduling fields)
-     * Required: date(or dates[]) + startTime + endTime + sessionTime/durationMin
+     * AUTO GENERATE SLOTS
      */
     const shouldGenerate =
       (generateSlots ?? true) &&
@@ -106,7 +138,17 @@ async function create(req, res) {
         (durationMin !== undefined && durationMin !== null));
 
     if (!shouldGenerate) {
-      return res.status(201).json({ doctor });
+      return res.status(201).json({
+        message: "Doctor account and profile created successfully",
+        user: {
+          id: user._id,
+          fullName: user.fullName,
+          email: user.email,
+          role: user.role,
+          mustChangePassword: user.mustChangePassword,
+        },
+        doctor,
+      });
     }
 
     const dateList = Array.isArray(dates) && dates.length ? dates : [date];
@@ -116,7 +158,6 @@ async function create(req, res) {
 
     const pieces = buildSlots({ startTime, endTime, durationMin: slotLen });
 
-    // OPTIONAL: regenerate slots only in that window (DO NOT delete booked)
     if (regenerate) {
       await Slot.deleteMany({
         centerId,
@@ -142,7 +183,6 @@ async function create(req, res) {
       }
     }
 
-    // Insert slots, ignore duplicates safely
     let inserted = 0;
     try {
       const result = await Slot.insertMany(slotDocs, { ordered: false });
@@ -156,6 +196,14 @@ async function create(req, res) {
     }
 
     return res.status(201).json({
+      message: "Doctor account, profile, and slots created successfully",
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role,
+        mustChangePassword: user.mustChangePassword,
+      },
       doctor,
       slots: {
         requested: slotDocs.length,
@@ -220,7 +268,7 @@ async function list(req, res) {
     const safeLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (safePage - 1) * safeLimit;
 
-    const [items, total] = await Promise.all([
+    const [items, total] = await Promise.all([ 
       Doctor.find(filter).sort({ createdAt: -1 }).skip(skip).limit(safeLimit).lean(),
       Doctor.countDocuments(filter),
     ]);
@@ -314,4 +362,67 @@ async function setActive(req, res) {
   }
 }
 
-module.exports = { create, getById, list, update, setActive };
+// Controller method for updating the doctor's own profile
+// Define the function first
+async function updateProfile(req, res) {
+  try {
+    const userId = req.user.id; // Get the logged-in doctor's ID from the token (set by 'protect' middleware)
+
+    // Log the userId to verify if it is correctly populated
+    console.log("Logged-in doctor userId:", userId);
+
+    const { name, specialization, clinic, fee, phone, startTime, endTime, sessionTime } = req.body;
+
+    // Use `userId` to find the doctor, since `userId` links the doctor to the logged-in user
+    const updatedDoctor = await Doctor.findOneAndUpdate(
+      { userId: userId },  // Match the logged-in user's ID in the Doctor collection
+      { name, specialization, clinic, fee, phone, startTime, endTime, sessionTime },
+      { new: true, runValidators: true }  // Ensures the updated doctor is returned
+    );
+
+    if (!updatedDoctor) {
+      return res.status(404).json({ message: "Doctor not found" });
+    }
+
+    res.json({
+      message: "Doctor profile updated successfully",
+      doctor: updatedDoctor,
+    });
+  } catch (err) {
+    console.error("Error updating profile:", err); // Log the error for debugging
+    res.status(500).json({ message: err.message });
+  }
+}
+
+async function getMe(req, res) {
+  try {
+    // Get the logged-in user's ID from the token, which is set by 'protect' middleware
+    const userId = req.user._id;
+
+    // Fetch the doctor's profile using the userId
+    const doctor = await Doctor.findOne({ userId }).select("-password"); // Exclude password field for security
+
+    if (!doctor) {
+      return res.status(404).json({ message: "Doctor profile not found" });
+    }
+
+    // Return the doctor's profile information
+    return res.json({
+      doctor: {
+        id: doctor._id,
+        name: doctor.name,
+        specialization: doctor.specialization,
+        clinic: doctor.clinic,
+        fee: doctor.fee,
+        phone: doctor.phone,
+        startTime: doctor.startTime,
+        endTime: doctor.endTime,
+        sessionTime: doctor.sessionTime,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+}
+
+module.exports = { create, getById, list, update, setActive, updateProfile, getMe };

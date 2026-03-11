@@ -12,6 +12,9 @@ const doctorRoutes = require("./routes/doctorChanneling/doctor.routes");
 const slotRoutes = require("./routes/doctorChanneling/slot.routes");
 const appointmentRoutes = require("./routes/doctorChanneling/appointment.routes");
 const prescriptionRoutes = require("./routes/doctorChanneling/prescription.routes");
+const adminDoctorRoutes = require("./routes/doctorChanneling/admin/adminDoctor.routes");
+const adminAuthRoutes = require("./routes/auth/adminAuth.routes");
+const userAuthRoutes = require("./routes/auth/userAuth.routes");
 
 // Set up Express app
 const app = express();
@@ -43,6 +46,9 @@ app.use("/api/doctors", doctorRoutes);
 app.use("/api/slots", slotRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/prescriptions", prescriptionRoutes);
+app.use("/api/admin/doctors", adminDoctorRoutes);
+app.use("/api/admin/auth", adminAuthRoutes);
+app.use("/api/auth", userAuthRoutes);
 
 // Error handler
 app.use(errorMiddleware);
