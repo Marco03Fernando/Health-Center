@@ -27,6 +27,7 @@ async function registerPatient(req, res) {
       mustChangePassword: false,
     });
 
+    // Generate a token (if you still want to use token-based authentication alongside sessions)
     const token = generateToken({
       id: user._id,
       role: user.role,
@@ -76,11 +77,9 @@ async function loginUser(req, res) {
       doctorProfileId = doctorProfile ? doctorProfile._id : null;
     }
 
-    const token = generateToken({
-      id: user._id,
-      role: user.role,
-      accountType: "user",
-    });
+    // Store user data in the session
+    req.session.userId = user._id;  // Store userId in session
+    req.session.role = user.role;   // Store user role in session
 
     return res.json({
       message: "Login successful",
@@ -93,25 +92,32 @@ async function loginUser(req, res) {
         mustChangePassword: user.mustChangePassword,
         doctorProfileId,
       },
-      token,
+      // Optional: You can still return a token if you want to support both session and token-based auth
+      token: generateToken({
+        id: user._id,
+        role: user.role,
+        accountType: "user",
+      }),
     });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }
 }
 
+// Get logged-in user's details
 async function getMe(req, res) {
   try {
-    const user = req.user;
+    const user = await User.findById(req.userId);  // Use req.userId from session
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
     let doctorProfileId = null;
     if (user.role === "doctor") {
       const doctorProfile = await Doctor.findOne({ userId: user._id }).select("_id");
-      // Check if doctor profile exists
       if (doctorProfile) {
         doctorProfileId = doctorProfile._id;
-      } else {
-        return res.status(404).json({ message: "Doctor profile not found" });
       }
     }
 
@@ -130,6 +136,8 @@ async function getMe(req, res) {
     return res.status(500).json({ message: err.message });
   }
 }
+
+// Change password for logged-in user
 async function changePassword(req, res) {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -138,7 +146,7 @@ async function changePassword(req, res) {
       return res.status(400).json({ message: "currentPassword and newPassword are required" });
     }
 
-    const user = await User.findById(req.user._id).select("+password");
+    const user = await User.findById(req.userId).select("+password");  // Use req.userId from session
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -158,4 +166,22 @@ async function changePassword(req, res) {
   }
 }
 
-module.exports = { registerPatient, loginUser, getMe, changePassword };
+// Logout functionality
+async function logoutUser(req, res) {
+  try {
+    // Destroy the session
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ message: "Error logging out" });
+      }
+
+      // Clear the session cookie
+      res.clearCookie('connect.sid');
+      return res.status(200).json({ message: "Logged out successfully" });
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+}
+
+module.exports = { registerPatient, loginUser, getMe, changePassword, logoutUser };

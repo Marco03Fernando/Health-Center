@@ -1,18 +1,14 @@
 const express = require("express");
 const router = express.Router();
 
-const {
-  registerPatient,
-  loginUser,
-  getMe,
-  changePassword,
-} = require("../../controllers/auth/userAuth.controller");
-
-const { protect } = require("../../middlewares/auth.middleware");
+const { registerPatient, loginUser, getMe, changePassword, logoutUser } = require("../../controllers/auth/userAuth.controller");
+const { protectSession } = require("../../middlewares/protectSession.middleware");  // Protect session
+console.log('protectSession middleware:', protectSession); 
 
 router.post("/register", registerPatient);
 router.post("/login", loginUser);
-router.get("/me", protect, getMe);
-router.patch("/change-password", protect, changePassword);
+router.post("/logout", logoutUser); // Add this route to your router
+router.get("/me", protectSession, getMe);  // Protect route with session
+router.patch("/change-password", protectSession, changePassword);  // Protect route with session
 
 module.exports = router;
