@@ -1,12 +1,11 @@
 const mongoose = require('mongoose');
-const Appoinment = require('./Appoinment');
 
 const AppointmentSlotSchema = new mongoose.Schema(
 
   {
     center: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "HealthCenter",
+      ref: "centers",
       required: true,
     },
     slotDate: {
@@ -30,12 +29,12 @@ const AppointmentSlotSchema = new mongoose.Schema(
     },
     appoinment: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Appoinment",
+      ref: "bookings",
       default: null,
     },
     bookedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref: 'users',
       default: null,
     },
   },
