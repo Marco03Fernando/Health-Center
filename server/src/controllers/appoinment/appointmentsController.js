@@ -140,7 +140,6 @@ async function cancel(req, res, next) {
   }
 }
 
-// Mark appointment as paid
 async function pay(req, res, next) {
   try {
     const { method } = req.body;
