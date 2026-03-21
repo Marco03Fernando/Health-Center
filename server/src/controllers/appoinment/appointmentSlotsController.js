@@ -4,6 +4,26 @@ require("../../models/User");
 require("../../models/Appoinment");
 const mongoose = require("mongoose");
 
+// ─── Slot expiry helpers ─────────────────────────────────────────────────────
+
+/**
+ * Combine slot.slotDate and slot.endTime into a single Date object.
+ */
+function getSlotEndDateTime(slot) {
+  const date = new Date(slot.slotDate);
+  const [hours, minutes] = slot.endTime.split(":").map(Number);
+  date.setHours(hours, minutes, 0, 0);
+  return date;
+}
+
+/**
+ * Return true when the slot's end date-time is <= the current time.
+ */
+function isSlotExpired(slot) {
+  return getSlotEndDateTime(slot) <= new Date();
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function generateAppointmentSlots(req, res) {
   try {
     let { healthCenterId, startDateStr, numberOfDays, slotMinutes } = req.body;
@@ -41,7 +61,8 @@ async function generateAppointmentSlots(req, res) {
       return res.status(400).json({ error: "Invalid startDate format" });
     }
 
-    const startDate = new Date(yearNum, monthNum, dayNum, 0, 0, 0, 0);
+    // Store as UTC midnight so the calendar date is timezone-agnostic
+    const startDate = new Date(Date.UTC(yearNum, monthNum, dayNum, 0, 0, 0, 0));
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -79,7 +100,8 @@ async function generateAppointmentSlots(req, res) {
       return `${pad(hh)}:${pad(mm)}`;
     };
 
-    const dateKey = (date) => date.toLocaleDateString("en-CA"); // YYYY-MM-DD
+    // Use UTC methods so the date string matches what was saved, regardless of server timezone
+    const dateKey = (date) => `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
 
     const openingMin = timeToMinutes(openingTime);
     const closingMin = timeToMinutes(closingTime);
@@ -92,11 +114,11 @@ async function generateAppointmentSlots(req, res) {
 
     const dates = [];
     for (let i = 0; i < numberOfDays; i++) {
-      dates.push(new Date(yearNum, monthNum, dayNum + i, 0, 0, 0, 0));
+      dates.push(new Date(Date.UTC(yearNum, monthNum, dayNum + i, 0, 0, 0, 0)));
     }
 
     const endDate = new Date(dates[dates.length - 1]);
-    endDate.setHours(23, 59, 59, 999);
+    endDate.setUTCHours(23, 59, 59, 999);
 
     const existingSlots = await AppointmentSlot.find({
       center: healthCenterId,
@@ -282,6 +304,81 @@ const getAvailableAppointmentSlots = async (req, res) => {
   }
 };
 
+async function getAppointmentSlotsByCenterId(req, res) {
+  try {
+    const { centerId } = req.params;
+    const { status, startDate, endDate, type } = req.query;
+
+    if (!mongoose.Types.ObjectId.isValid(centerId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid center ID",
+      });
+    }
+
+    let filter = { center: centerId };
+
+    if (status) {
+      if (!["AVAILABLE", "BOOKED", "CANCELLED"].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid status value. Must be AVAILABLE, BOOKED, or CANCELLED",
+        });
+      }
+      filter.status = status;
+    }
+
+    if (startDate || endDate) {
+      filter.slotDate = {};
+      if (startDate) filter.slotDate.$gte = new Date(startDate);
+      if (endDate) filter.slotDate.$lte = new Date(endDate);
+    }
+
+    // Pre-filter by date range for type-based queries (optimisation).
+    // Exact time-boundary check is applied in-memory below.
+    if (type === "upcoming") {
+      const todayMidnight = new Date();
+      todayMidnight.setHours(0, 0, 0, 0);
+      filter.slotDate = Object.assign(filter.slotDate || {}, { $gte: todayMidnight });
+    } else if (type === "expired") {
+      const endOfToday = new Date();
+      endOfToday.setHours(23, 59, 59, 999);
+      filter.slotDate = Object.assign(filter.slotDate || {}, { $lte: endOfToday });
+    } else if (type) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid type. Must be 'upcoming' or 'expired'",
+      });
+    }
+
+    const slots = await AppointmentSlot.find(filter)
+      .populate("center")
+      .populate("bookedBy")
+      .populate("appoinment")
+      .sort({ slotDate: 1, startTime: 1 });
+
+    // Apply exact time-aware in-memory filter when type is specified.
+    let filteredSlots = slots;
+    if (type === "upcoming") {
+      filteredSlots = slots.filter((s) => !isSlotExpired(s));
+    } else if (type === "expired") {
+      filteredSlots = slots.filter((s) => isSlotExpired(s));
+    }
+
+    return res.status(200).json({
+      success: true,
+      count: filteredSlots.length,
+      data: filteredSlots,
+    });
+  } catch (error) {
+    console.error("getAppointmentSlotsByCenterId error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+}
+
 async function deleteAppointmentSlot(req, res) {
   try {
     const { id } = req.params;
@@ -336,10 +433,178 @@ async function deleteAppointmentSlot(req, res) {
   }
 }
 
+/**
+ * DELETE /api/deleteExpiredUnbooked?centerId=<id>[&date=YYYY-MM-DD]
+ *
+ * Deletes expired (endDateTime <= now) unbooked (appoinment == null) slots.
+ * If `date` is supplied only that calendar date is affected.
+ */
+async function deleteExpiredUnbookedSlots(req, res) {
+  try {
+    const { centerId, date } = req.query;
+
+    if (!centerId || !mongoose.Types.ObjectId.isValid(centerId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid centerId query param is required",
+      });
+    }
+
+    // Only unbooked slots for this center.
+    const filter = {
+      center: centerId,
+      appoinment: null,
+      status: { $ne: "BOOKED" },
+    };
+
+    if (date) {
+      // Restrict to the single given calendar date using UTC boundaries
+      // to avoid timezone mismatches between local server time and stored UTC dates.
+      // Expect `date` in YYYY-MM-DD.
+      const parts = (date || '').split('-').map(Number);
+      if (parts.length !== 3 || parts.some((v) => Number.isNaN(v))) {
+        return res.status(400).json({ success: false, message: 'Invalid date format. Use YYYY-MM-DD' });
+      }
+      const [y, m, d] = parts;
+      const startUtc = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+      const nextUtc = new Date(Date.UTC(y, m - 1, d + 1, 0, 0, 0, 0));
+      filter.slotDate = { $gte: startUtc, $lt: nextUtc };
+    } else {
+      // Optimisation: future slots can never be expired. Use end-of-today in UTC.
+      const now = new Date();
+      const endOfTodayUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+      filter.slotDate = { $lte: endOfTodayUtc };
+    }
+
+    const candidates = await AppointmentSlot.find(filter).lean();
+
+    // Exact time-boundary check in memory.
+    const expired = candidates.filter((s) => isSlotExpired(s));
+    const expiredIds = expired.map((s) => s._id);
+
+    // Helpful debug info for callers: how many candidates were examined
+    // and a small preview of candidate slots (id, slotDate, endTime).
+    const candidatesPreview = candidates.slice(0, 10).map((s) => ({
+      _id: s._id,
+      slotDate: s.slotDate,
+      endTime: s.endTime,
+    }));
+
+    if (expiredIds.length === 0) {
+      console.debug('deleteExpiredUnbookedSlots: candidates=', candidates.length, 'expired=0');
+      return res.status(200).json({
+        success: true,
+        message: "No expired unbooked slots found to delete",
+        candidatesCount: candidates.length,
+        candidatesPreview,
+        deletedCount: 0,
+      });
+    }
+
+    const result = await AppointmentSlot.deleteMany({ _id: { $in: expiredIds } });
+
+    console.debug('deleteExpiredUnbookedSlots: candidates=', candidates.length, 'expired=', expiredIds.length, 'deleted=', result.deletedCount);
+
+    return res.status(200).json({
+      success: true,
+      message: "Expired unbooked slots deleted successfully",
+      candidatesCount: candidates.length,
+      deletedCount: result.deletedCount,
+      deletedIdsPreview: expiredIds.slice(0, 20),
+    });
+  } catch (error) {
+    console.error("deleteExpiredUnbookedSlots error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+}
+
+/**
+ * DELETE /api/deleteUpcomingUnbooked?centerId=<id>&date=YYYY-MM-DD
+ *
+ * Deletes upcoming (not yet expired) unbooked slots for a specific calendar date.
+ * Returns counts and an array of failures when slots could not be deleted
+ * (e.g. because they were already booked or already past).
+ */
+async function deleteUpcomingUnbookedSlots(req, res) {
+  try {
+    const { centerId, date } = req.query;
+
+    if (!centerId || !mongoose.Types.ObjectId.isValid(centerId)) {
+      return res.status(400).json({ success: false, message: 'Valid centerId query param is required' });
+    }
+
+    if (!date) {
+      return res.status(400).json({ success: false, message: 'date query param (YYYY-MM-DD) is required for upcoming bulk delete' });
+    }
+
+    const parts = (date || '').split('-').map(Number);
+    if (parts.length !== 3 || parts.some((v) => Number.isNaN(v))) {
+      return res.status(400).json({ success: false, message: 'Invalid date format. Use YYYY-MM-DD' });
+    }
+
+    const [y, m, d] = parts;
+    const startUtc = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+    const nextUtc = new Date(Date.UTC(y, m - 1, d + 1, 0, 0, 0, 0));
+
+    // Load all slots for that center and date
+    const candidates = await AppointmentSlot.find({
+      center: centerId,
+      slotDate: { $gte: startUtc, $lt: nextUtc },
+    }).lean();
+
+    const now = new Date();
+
+    const deletableIds = [];
+    const failed = [];
+
+    for (const s of candidates) {
+      // Booked or attached appointment -> cannot delete
+      if (s.status === 'BOOKED' || s.appoinment) {
+        failed.push({ _id: s._id, startTime: s.startTime, reason: 'BOOKED' });
+        continue;
+      }
+
+      // If the slot is already expired (in the past) we treat it as non-upcoming and do not delete here.
+      if (isSlotExpired(s)) {
+        failed.push({ _id: s._id, startTime: s.startTime, reason: 'PAST' });
+        continue;
+      }
+
+      deletableIds.push(s._id);
+    }
+
+    let deletedCount = 0;
+    if (deletableIds.length > 0) {
+      const result = await AppointmentSlot.deleteMany({ _id: { $in: deletableIds } });
+      deletedCount = result.deletedCount || 0;
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Bulk upcoming unbooked delete completed',
+      candidatesCount: candidates.length,
+      deletedCount,
+      failed,
+    });
+  } catch (error) {
+    console.error('deleteUpcomingUnbookedSlots error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}
+
 module.exports = {
   generateAppointmentSlots,
   updateAppointmentSlots,
   getAppointmentSlots,
+  getAppointmentSlotsByCenterId,
   getAvailableAppointmentSlots,
   deleteAppointmentSlot,
+  deleteExpiredUnbookedSlots,
+  deleteUpcomingUnbookedSlots,
+  // exported for reuse in other controllers/services if needed
+  getSlotEndDateTime,
+  isSlotExpired,
 };

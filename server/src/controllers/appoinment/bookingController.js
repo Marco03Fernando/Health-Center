@@ -5,7 +5,7 @@ const User = require('../../models/User');
 const HealthCenter = require('../../models/HealthCenter');
 require('../../models/DiagnosticTest');
 
-const { sendBookingConfirmationEmail } = require("../../utils/emailService");
+const { sendBookingConfirmationEmail, sendBookingCancellationEmail, sendBookingCompletedEmail } = require("../../utils/emailService");
 
 async function bookAppointment(req, res) {
   const { slotId, userId, diagnosticTestId } = req.body || {};
@@ -112,41 +112,72 @@ async function updateAppointment(req, res) {
     session.startTransaction();
 
 
-    const booking = await Booking.findById(bookingId).session(session);
+      const booking = await Booking.findById(bookingId).session(session);
     if (!booking) {
       await session.abortTransaction();
       return res.status(404).json({ error: 'Booking not found' });
     }
 
+      // capture old status to determine if we need to send cancel email after update
+      let oldStatus = booking.appointmentStatus;
 
-    if (diagnosticTestId) {
-      booking.diagnosticTest = diagnosticTestId;
-    }
-
-    if (status) {
-      const oldStatus = booking.appointmentStatus;
-      booking.appointmentStatus = status;
-
-      if (status === 'CANCELLED' && oldStatus !== 'CANCELLED') {
-        await AppointmentSlot.findByIdAndUpdate(
-          booking.slot,
-          { 
-            status: 'AVAILABLE', 
-            appoinment: null, 
-            bookedBy: null 
-          },
-          { session }
-        );
+      if (diagnosticTestId) {
+        booking.diagnosticTest = diagnosticTestId;
       }
-    }
+
+      if (status) {
+        booking.appointmentStatus = status;
+
+        if (status === 'CANCELLED' && oldStatus !== 'CANCELLED') {
+          await AppointmentSlot.findByIdAndUpdate(
+            booking.slot,
+            { 
+              status: 'AVAILABLE', 
+              appoinment: null, 
+              bookedBy: null 
+            },
+            { session }
+          );
+        }
+      }
 
     await booking.save({ session });
     await session.commitTransaction();
     session.endSession();
 
+    // send emails if status changed
+    try {
+      const user = await User.findById(booking.user);
+      const center = await HealthCenter.findById(booking.healthCenter);
+
+      if (status === 'CANCELLED' && oldStatus !== 'CANCELLED') {
+        if (user && user.email) {
+          sendBookingCancellationEmail(user.email, {
+            bookingId: booking._id,
+            appointmentDate: booking.appointmentDate,
+            center: center ? center.name : '',
+            status: 'CANCELLED',
+          }).catch((err) => console.error('Cancellation email failed:', err));
+        }
+      }
+
+      if (status === 'COMPLETED' && oldStatus !== 'COMPLETED') {
+        if (user && user.email) {
+          sendBookingCompletedEmail(user.email, {
+            bookingId: booking._id,
+            appointmentDate: booking.appointmentDate,
+            center: center ? center.name : '',
+            status: 'COMPLETED',
+          }).catch((err) => console.error('Completion email failed:', err));
+        }
+      }
+    } catch (e) {
+      console.error('Error while sending status-change emails:', e);
+    }
+
     return res.status(200).json({ 
       success: true, 
-      message: 'Appointment updated successfully', 
+      message: `Appointment ${status.toLowerCase()} successfully`, 
       data: booking 
     });
 
@@ -277,10 +308,110 @@ async function getAllAppointmentsAdmin(req, res) {
   }
 }
 
+async function getAppointmentById(req, res) {
+  try {
+    const { bookingId } = req.params;
+
+    if (!bookingId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Booking ID is required'
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid booking ID format'
+      });
+    }
+
+    const booking = await Booking.findById(bookingId)
+      .populate('user', 'name email phone')
+      .populate('healthCenter', 'name address phone')
+      .populate('diagnosticTest', 'name description preparationInstructions')
+      .populate('slot', 'slotDate startTime endTime status');
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: 'Appointment not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: booking
+    });
+  } catch (error) {
+    console.error('Error fetching appointment by ID:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+}
+
+async function getUserAppointments(req, res) {
+  try {
+    const { userId } = req.params;
+    const { status } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required'
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID format'
+      });
+    }
+
+    // Build filter query
+    const filter = { user: userId };
+
+    // Add status filter if provided
+    if (status) {
+      const validStatuses = ['CONFIRMED', 'CANCELLED', 'COMPLETED'];
+      if (!validStatuses.includes(status.toUpperCase())) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+        });
+      }
+      filter.appointmentStatus = status.toUpperCase();
+    }
+
+    const appointments = await Booking.find(filter)
+      .populate('healthCenter', 'name address phone')
+      .populate('diagnosticTest', 'name description preparationInstructions')
+      .populate('slot', 'slotDate startTime endTime status')
+      .sort({ appointmentDate: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: appointments.length,
+      data: appointments
+    });
+  } catch (error) {
+    console.error('Error fetching user appointments:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+}
+
 module.exports = {
   bookAppointment,
   updateAppointment,
-  deleteAppointment ,
-  getCenterAppointments ,
-  getAllAppointmentsAdmin , 
+  deleteAppointment,
+  getCenterAppointments,
+  getAllAppointmentsAdmin,
+  getAppointmentById,
+  getUserAppointments,
 };
