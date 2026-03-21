@@ -22,8 +22,13 @@ const UserSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['ADMIN', 'CENTER_MANAGER', 'PATIENT'],
+      enum: ['ADMIN', 'CENTER_ADMIN', 'PATIENT'],
       default: 'PATIENT',
+    },
+    center: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'centers',
+      default: null,
     },
     isActive: {
       type: Boolean,
