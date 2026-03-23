@@ -4,11 +4,7 @@ require("../../models/User");
 require("../../models/Appoinment");
 const mongoose = require("mongoose");
 
-// ─── Slot expiry helpers ─────────────────────────────────────────────────────
 
-/**
- * Combine slot.slotDate and slot.endTime into a single Date object.
- */
 function getSlotEndDateTime(slot) {
   const date = new Date(slot.slotDate);
   const [hours, minutes] = slot.endTime.split(":").map(Number);
@@ -16,13 +12,10 @@ function getSlotEndDateTime(slot) {
   return date;
 }
 
-/**
- * Return true when the slot's end date-time is <= the current time.
- */
+
 function isSlotExpired(slot) {
   return getSlotEndDateTime(slot) <= new Date();
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
 async function generateAppointmentSlots(req, res) {
   try {
@@ -433,12 +426,7 @@ async function deleteAppointmentSlot(req, res) {
   }
 }
 
-/**
- * DELETE /api/deleteExpiredUnbooked?centerId=<id>[&date=YYYY-MM-DD]
- *
- * Deletes expired (endDateTime <= now) unbooked (appoinment == null) slots.
- * If `date` is supplied only that calendar date is affected.
- */
+
 async function deleteExpiredUnbookedSlots(req, res) {
   try {
     const { centerId, date } = req.query;
@@ -521,13 +509,7 @@ async function deleteExpiredUnbookedSlots(req, res) {
   }
 }
 
-/**
- * DELETE /api/deleteUpcomingUnbooked?centerId=<id>&date=YYYY-MM-DD
- *
- * Deletes upcoming (not yet expired) unbooked slots for a specific calendar date.
- * Returns counts and an array of failures when slots could not be deleted
- * (e.g. because they were already booked or already past).
- */
+
 async function deleteUpcomingUnbookedSlots(req, res) {
   try {
     const { centerId, date } = req.query;
@@ -604,7 +586,6 @@ module.exports = {
   deleteAppointmentSlot,
   deleteExpiredUnbookedSlots,
   deleteUpcomingUnbookedSlots,
-  // exported for reuse in other controllers/services if needed
   getSlotEndDateTime,
   isSlotExpired,
 };
