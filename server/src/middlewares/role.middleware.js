@@ -1,13 +1,15 @@
 function allowRoles(...roles) {
   return (req, res, next) => {
-    const account = req.user || req.admin;
+    const role = req.user?.role || req.admin?.role || req.role;
 
-    if (!account) {
+    if (!role) {
       return res.status(401).json({ message: "Not authorized" });
     }
 
-    if (!roles.includes(account.role)) {
-      return res.status(403).json({ message: "Forbidden: insufficient permissions" });
+    if (!roles.includes(role)) {
+      return res
+        .status(403)
+        .json({ message: "Forbidden: insufficient permissions" });
     }
 
     next();

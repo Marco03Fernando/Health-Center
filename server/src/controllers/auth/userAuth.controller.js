@@ -1,3 +1,4 @@
+const axios = require("axios");  // Import axios for making API requests
 const User = require("../../models/doctorChanneling/user.model");
 const Doctor = require("../../models/doctorChanneling/doctor.model");
 const generateToken = require("../../utils/generateToken");
@@ -18,6 +19,8 @@ async function registerPatient(req, res) {
       return res.status(400).json({ message: "User already exists" });
     }
 
+    console.log("User registration details are valid, proceeding with registration...");
+
     const user = await User.create({
       fullName,
       phone,
@@ -26,6 +29,8 @@ async function registerPatient(req, res) {
       role: "patient",
       mustChangePassword: false,
     });
+
+    console.log("User created successfully:", user);
 
     // Generate a token (if you still want to use token-based authentication alongside sessions)
     const token = generateToken({
@@ -47,6 +52,7 @@ async function registerPatient(req, res) {
       token,
     });
   } catch (err) {
+    console.error("Error during patient registration:", err);
     return res.status(500).json({ message: err.message });
   }
 }

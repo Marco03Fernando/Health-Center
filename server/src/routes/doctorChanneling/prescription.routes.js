@@ -3,7 +3,11 @@ const router = express.Router();
 
 const controller = require("../../controllers/doctorChanneling/prescription.controller");
 const { protect } = require("../../middlewares/auth.middleware");
-const { allowRoles } = require("../../middlewares/role.middleware"); // Import allowRoles middleware
+const { allowRoles } = require("../../middlewares/role.middleware");
+const { protectDoctorRoute } = require("../../middlewares/protectDoctorRoute");
+
+// Doctor frontend (session-based)
+router.get("/doctor/me", protectDoctorRoute, controller.listByDoctor);
 
 // Create prescription - doctor only
 router.post("/", protect, allowRoles("doctor"), controller.create);

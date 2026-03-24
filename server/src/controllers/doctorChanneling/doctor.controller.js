@@ -3,7 +3,6 @@ const Doctor = require("../../models/doctorChanneling/doctor.model");
 const Slot = require("../../models/doctorChanneling/slot.model");
 const User = require("../../models/doctorChanneling/user.model");
 
-
 // Function to validate ObjectId
 function assertObjectId(id, name = "id") {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -268,7 +267,7 @@ async function list(req, res) {
     const safeLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (safePage - 1) * safeLimit;
 
-    const [items, total] = await Promise.all([ 
+    const [items, total] = await Promise.all([
       Doctor.find(filter).sort({ createdAt: -1 }).skip(skip).limit(safeLimit).lean(),
       Doctor.countDocuments(filter),
     ]);
@@ -363,61 +362,111 @@ async function setActive(req, res) {
 }
 
 // Controller method for updating the doctor's own profile
-// Define the function first
 async function updateProfile(req, res) {
   try {
-    const userId = req.user.id; // Get the logged-in doctor's ID from the token (set by 'protect' middleware)
+    const userId = req.userId;
 
-    // Log the userId to verify if it is correctly populated
-    console.log("Logged-in doctor userId:", userId);
+    const {
+      fullName,
+      email,
+      name,
+      specialization,
+      clinic,
+      fee,
+      phone,
+      startTime,
+      endTime,
+      sessionTime,
+    } = req.body;
 
-    const { name, specialization, clinic, fee, phone, startTime, endTime, sessionTime } = req.body;
-
-    // Use `userId` to find the doctor, since `userId` links the doctor to the logged-in user
     const updatedDoctor = await Doctor.findOneAndUpdate(
-      { userId: userId },  // Match the logged-in user's ID in the Doctor collection
-      { name, specialization, clinic, fee, phone, startTime, endTime, sessionTime },
-      { new: true, runValidators: true }  // Ensures the updated doctor is returned
+      { userId },
+      {
+        name,
+        specialization,
+        clinic,
+        fee,
+        phone,
+        startTime,
+        endTime,
+        sessionTime,
+      },
+      { new: true, runValidators: true }
     );
 
     if (!updatedDoctor) {
       return res.status(404).json({ message: "Doctor not found" });
     }
 
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        $set: {
+          ...(fullName !== undefined ? { fullName } : {}),
+          ...(email !== undefined ? { email } : {}),
+          ...(phone !== undefined ? { phone } : {}),
+        },
+      },
+      { new: true, runValidators: true }
+    ).select("fullName email phone role mustChangePassword");
+
     res.json({
       message: "Doctor profile updated successfully",
-      doctor: updatedDoctor,
+      doctor: {
+        id: updatedDoctor._id,
+        userId: updatedDoctor.userId,
+        fullName: updatedUser?.fullName || "",
+        email: updatedUser?.email || "",
+        phone: updatedUser?.phone || updatedDoctor.phone || "",
+        role: updatedUser?.role || "doctor",
+        mustChangePassword: updatedUser?.mustChangePassword || false,
+        name: updatedDoctor.name,
+        specialization: updatedDoctor.specialization,
+        clinic: updatedDoctor.clinic,
+        fee: updatedDoctor.fee,
+        startTime: updatedDoctor.startTime,
+        endTime: updatedDoctor.endTime,
+        sessionTime: updatedDoctor.sessionTime,
+        isActive: updatedDoctor.isActive,
+      },
     });
   } catch (err) {
-    console.error("Error updating profile:", err); // Log the error for debugging
+    console.error("Error updating profile:", err);
     res.status(500).json({ message: err.message });
   }
 }
 
 async function getMe(req, res) {
   try {
-    // Get the logged-in user's ID from the token, which is set by 'protect' middleware
-    const userId = req.user._id;
+    const userId = req.userId;
 
-    // Fetch the doctor's profile using the userId
-    const doctor = await Doctor.findOne({ userId }).select("-password"); // Exclude password field for security
+    const [doctor, user] = await Promise.all([
+      Doctor.findOne({ userId }).lean(),
+      User.findById(userId).select("fullName email phone role mustChangePassword").lean(),
+    ]);
 
     if (!doctor) {
       return res.status(404).json({ message: "Doctor profile not found" });
     }
 
-    // Return the doctor's profile information
     return res.json({
       doctor: {
         id: doctor._id,
+        userId: doctor.userId,
+        fullName: user?.fullName || "",
+        email: user?.email || "",
+        phone: user?.phone || doctor.phone || "",
+        role: user?.role || "doctor",
+        mustChangePassword: user?.mustChangePassword || false,
         name: doctor.name,
         specialization: doctor.specialization,
         clinic: doctor.clinic,
         fee: doctor.fee,
-        phone: doctor.phone,
         startTime: doctor.startTime,
         endTime: doctor.endTime,
         sessionTime: doctor.sessionTime,
+        isActive: doctor.isActive,
+        centerId: doctor.centerId || null,
       },
     });
   } catch (err) {

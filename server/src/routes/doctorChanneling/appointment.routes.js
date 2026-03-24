@@ -2,20 +2,21 @@ const express = require("express");
 const router = express.Router();
 
 const controller = require("../../controllers/doctorChanneling/appointment.controller");
-const { protectDoctorRoute } = require("../../middlewares/protectDoctorRoute");  // Correct import of middleware
+const { protectDoctorRoute } = require("../../middlewares/protectDoctorRoute");
 
-// Booking (no login yet)
+// Booking
 router.post("/", controller.create);
 
-// User appointment list (no login yet)
-router.get("/user/:userId", controller.listByDoctor);
+// Logged-in doctor appointment list
+router.get("/doctor/me", protectDoctorRoute, controller.listByDoctor);
 
-// Cancel appointment (no login yet)
+// Doctor updates appointment status
+router.patch("/:id/status", protectDoctorRoute, controller.updateAppointmentStatusByDoctor);
+
+// Cancel appointment
 router.delete("/:id/cancel", controller.cancel);
 
-// Receptionist payment 
-//router.patch("/:id/pay", controller.pay);
-
-
+// Receptionist payment
+// router.patch("/:id/pay", controller.pay);
 
 module.exports = router;
