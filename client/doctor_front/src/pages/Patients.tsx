@@ -3,7 +3,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Search, Users, Plus, X } from "lucide-react";
+import {
+  Search,
+  Users,
+  Plus,
+  X,
+  UserRound,
+  Mail,
+  CalendarDays,
+  FileText,
+  Loader2,
+  ClipboardCheck,
+  CircleOff,
+  Pill,
+} from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
 
@@ -74,6 +87,19 @@ function canMarkAttendance(patient: PatientRow) {
   if (patient.status === "no_show") return false;
   if (patient.hasPrescription) return false;
   return true;
+}
+
+function getStatusClass(status: string) {
+  if (status === "cancelled") {
+    return "border-destructive/30 bg-destructive/10 text-destructive";
+  }
+  if (status === "completed") {
+    return "border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400";
+  }
+  if (status === "no_show") {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400";
+  }
+  return "border-primary/30 bg-primary/10 text-primary";
 }
 
 export default function Patients() {
@@ -172,6 +198,12 @@ export default function Patients() {
         patient.email.toLowerCase().includes(q)
     );
   }, [patients, search]);
+
+  const totalPatients = patients.length;
+  const totalWithPrescription = patients.filter((p) => p.hasPrescription).length;
+  const pendingAction = patients.filter(
+    (p) => canCreatePrescription(p) || canMarkAttendance(p)
+  ).length;
 
   const openPrescriptionModal = (patient: PatientRow) => {
     if (!canCreatePrescription(patient)) return;
@@ -277,140 +309,225 @@ export default function Patients() {
   };
 
   if (loading) {
-    return <div className="p-6">Loading patients...</div>;
+    return (
+      <div className="flex items-center justify-center rounded-2xl border border-dashed py-16 text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+        Loading patients...
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <Users className="h-6 w-6 text-primary" />
-            Patients
-          </h1>
-          <p className="text-muted-foreground">
-            View patients from your booked appointments
-          </p>
+    <div className="space-y-8 p-1 md:p-2">
+      <div className="rounded-3xl border bg-gradient-to-br from-background to-muted/30 p-6 shadow-sm md:p-8">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground">
+              <Users className="h-3.5 w-3.5" />
+              Patient Management
+            </div>
+
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Patients</h1>
+              <p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">
+                View patients from your booked appointments, update attendance,
+                and create prescriptions from a cleaner professional interface.
+              </p>
+            </div>
+          </div>
+
+          <div className="relative w-full xl:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search by patient name or email"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-11 rounded-xl pl-10"
+            />
+          </div>
         </div>
 
-        <div className="relative w-full sm:max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search by name or email"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          <Card className="rounded-2xl border shadow-none">
+            <CardContent className="p-5">
+              <p className="text-sm text-muted-foreground">Total Patients</p>
+              <p className="mt-2 text-2xl font-bold">{totalPatients}</p>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border shadow-none">
+            <CardContent className="p-5">
+              <p className="text-sm text-muted-foreground">With Prescription</p>
+              <p className="mt-2 text-2xl font-bold">{totalWithPrescription}</p>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border shadow-none">
+            <CardContent className="p-5">
+              <p className="text-sm text-muted-foreground">Pending Action</p>
+              <p className="mt-2 text-2xl font-bold">{pendingAction}</p>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Patient List</CardTitle>
+      <Card className="rounded-3xl border shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Patient List</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Review recent patient activity and perform appointment-related actions.
+          </p>
         </CardHeader>
-        <CardContent>
+
+        <CardContent className="pt-3">
           {filteredPatients.length === 0 ? (
-            <div className="rounded-lg border bg-muted p-6 text-center text-sm text-muted-foreground">
-              No patients found.
+            <div className="rounded-2xl border border-dashed p-10 text-center">
+              <Users className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+              <p className="text-sm font-medium">No patients found</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Try changing the search term or wait for new booked appointments.
+              </p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {filteredPatients.map((patient) => {
                 const createAllowed = canCreatePrescription(patient);
                 const attendanceAllowed = canMarkAttendance(patient);
                 const isStatusUpdating = statusUpdatingId === patient.lastAppointmentId;
 
                 return (
-                  <div
+                  <Card
                     key={patient.id}
-                    className="flex flex-col gap-3 rounded-xl border p-4 xl:flex-row xl:items-center xl:justify-between"
+                    className="rounded-2xl border shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                   >
-                    <div className="space-y-1">
-                      <h3 className="font-semibold">{patient.fullName}</h3>
-                      <p className="text-sm text-muted-foreground">{patient.email}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Last Appointment: {patient.lastDate}{" "}
-                        {patient.lastTime !== "-" ? `at ${patient.lastTime}` : ""}
-                      </p>
-                    </div>
+                    <CardContent className="p-5">
+                      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                        <div className="flex min-w-0 items-start gap-4">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
+                            <UserRound className="h-5 w-5 text-primary" />
+                          </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline" className="text-xs">
-                        {patient.appointmentCount} Appointment
-                        {patient.appointmentCount > 1 ? "s" : ""}
-                      </Badge>
+                          <div className="min-w-0 flex-1 space-y-3">
+                            <div>
+                              <h3 className="text-base font-semibold">{patient.fullName}</h3>
+                              <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+                                <Mail className="h-4 w-4 shrink-0" />
+                                <span className="truncate">{patient.email}</span>
+                              </div>
+                            </div>
 
-                      <Badge
-                        variant="outline"
-                        className={
-                          patient.status === "cancelled"
-                            ? "text-xs border-destructive/30 bg-destructive/10 text-destructive"
-                            : patient.status === "completed"
-                            ? "text-xs border-green-500/30 bg-green-500/10 text-green-600"
-                            : patient.status === "no_show"
-                            ? "text-xs border-amber-500/30 bg-amber-500/10 text-amber-600"
-                            : "text-xs border-primary/30 bg-primary/10 text-primary"
-                        }
-                      >
-                        {patient.status}
-                      </Badge>
+                            <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2 xl:grid-cols-3">
+                              <div className="flex items-center gap-2">
+                                <CalendarDays className="h-4 w-4 shrink-0" />
+                                <span>
+                                  {patient.lastDate} {patient.lastTime !== "-" ? `at ${patient.lastTime}` : ""}
+                                </span>
+                              </div>
 
-                      {patient.hasPrescription ? (
-                        <Badge
-                          variant="outline"
-                          className="text-xs border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
-                        >
-                          Prescription Created
-                        </Badge>
-                      ) : null}
+                              <div className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 shrink-0" />
+                                <span>
+                                  {patient.appointmentCount} Appointment
+                                  {patient.appointmentCount > 1 ? "s" : ""}
+                                </span>
+                              </div>
 
-                      {attendanceAllowed ? (
-                        <>
-                          <Button
-                            size="sm"
+                              <div className="flex items-center gap-2">
+                                <Pill className="h-4 w-4 shrink-0" />
+                                <span>
+                                  {patient.hasPrescription ? "Prescription Created" : "No Prescription Yet"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                          <Badge
                             variant="outline"
-                            className="h-8 px-3 text-xs"
-                            onClick={() =>
-                              patient.lastAppointmentId &&
-                              handleUpdateAppointmentStatus(
-                                patient.lastAppointmentId,
-                                "no_show"
-                              )
-                            }
-                            disabled={isStatusUpdating}
+                            className={`text-xs rounded-full ${getStatusClass(patient.status)}`}
                           >
-                            {isStatusUpdating ? "Updating..." : "No Show"}
-                          </Button>
+                            {patient.status}
+                          </Badge>
 
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 px-3 text-xs"
-                            onClick={() =>
-                              patient.lastAppointmentId &&
-                              handleUpdateAppointmentStatus(
-                                patient.lastAppointmentId,
-                                "completed"
-                              )
-                            }
-                            disabled={isStatusUpdating}
-                          >
-                            {isStatusUpdating ? "Updating..." : "Complete"}
-                          </Button>
-                        </>
-                      ) : null}
+                          {patient.hasPrescription ? (
+                            <Badge
+                              variant="outline"
+                              className="text-xs rounded-full border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            >
+                              Prescription Created
+                            </Badge>
+                          ) : null}
 
-                      {createAllowed ? (
-                        <Button
-                          size="sm"
-                          className="h-8 px-3 text-xs"
-                          onClick={() => openPrescriptionModal(patient)}
-                        >
-                          Create Prescription
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
+                          {attendanceAllowed ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-9 rounded-xl px-3 text-xs"
+                                onClick={() =>
+                                  patient.lastAppointmentId &&
+                                  handleUpdateAppointmentStatus(
+                                    patient.lastAppointmentId,
+                                    "no_show"
+                                  )
+                                }
+                                disabled={isStatusUpdating}
+                              >
+                                {isStatusUpdating ? (
+                                  <>
+                                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                    Updating...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CircleOff className="mr-1.5 h-3.5 w-3.5" />
+                                    No Show
+                                  </>
+                                )}
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-9 rounded-xl px-3 text-xs"
+                                onClick={() =>
+                                  patient.lastAppointmentId &&
+                                  handleUpdateAppointmentStatus(
+                                    patient.lastAppointmentId,
+                                    "completed"
+                                  )
+                                }
+                                disabled={isStatusUpdating}
+                              >
+                                {isStatusUpdating ? (
+                                  <>
+                                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                    Updating...
+                                  </>
+                                ) : (
+                                  <>
+                                    <ClipboardCheck className="mr-1.5 h-3.5 w-3.5" />
+                                    Complete
+                                  </>
+                                )}
+                              </Button>
+                            </>
+                          ) : null}
+
+                          {createAllowed ? (
+                            <Button
+                              size="sm"
+                              className="h-9 rounded-xl px-3 text-xs"
+                              onClick={() => openPrescriptionModal(patient)}
+                            >
+                              Create Prescription
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 );
               })}
             </div>
@@ -420,66 +537,111 @@ export default function Patients() {
 
       {selectedPatient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl rounded-xl bg-background shadow-lg">
-            <div className="flex items-center justify-between border-b p-4">
-              <div>
-                <h2 className="text-lg font-semibold">Create Prescription</h2>
-                <p className="text-sm text-muted-foreground">
-                  Patient: {selectedPatient.fullName}
-                </p>
-              </div>
-              <Button variant="ghost" size="icon" onClick={closePrescriptionModal}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="space-y-4 p-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Diagnosis</label>
-                <textarea
-                  value={diagnosis}
-                  onChange={(e) => setDiagnosis(e.target.value)}
-                  placeholder="Enter diagnosis"
-                  className="min-h-[100px] w-full rounded-md border bg-background px-3 py-2 text-sm outline-none"
-                />
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium">Medicines</label>
-                  <Button type="button" variant="outline" size="sm" onClick={addMedicineField}>
-                    <Plus className="mr-1 h-4 w-4" />
-                    Add Medicine
-                  </Button>
+          <div className="w-full max-w-2xl overflow-hidden rounded-3xl bg-background shadow-lg">
+            <div className="border-b bg-background px-6 py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-semibold">Create Prescription</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Patient: {selectedPatient.fullName}
+                  </p>
                 </div>
 
-                {medicineNames.map((medicine, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <Input
-                      value={medicine}
-                      onChange={(e) => handleMedicineChange(index, e.target.value)}
-                      placeholder={`Medicine ${index + 1}`}
-                    />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-xl"
+                  onClick={closePrescriptionModal}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="max-h-[80vh] overflow-y-auto px-6 pb-6">
+              <div className="space-y-6 py-6">
+                <div className="rounded-2xl border bg-muted/20 p-4">
+                  <p className="text-xs text-muted-foreground">Selected Patient</p>
+                  <p className="mt-1 text-sm font-semibold">{selectedPatient.fullName}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{selectedPatient.email}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Diagnosis</label>
+                  <textarea
+                    value={diagnosis}
+                    onChange={(e) => setDiagnosis(e.target.value)}
+                    placeholder="Enter diagnosis"
+                    className="min-h-[120px] w-full rounded-xl border bg-background px-3 py-3 text-sm outline-none"
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-sm font-medium">Medicines</label>
                     <Button
                       type="button"
                       variant="outline"
-                      size="icon"
-                      onClick={() => removeMedicineField(index)}
-                      disabled={medicineNames.length === 1}
+                      size="sm"
+                      onClick={addMedicineField}
+                      className="h-9 rounded-xl"
                     >
-                      <X className="h-4 w-4" />
+                      <Plus className="mr-1.5 h-4 w-4" />
+                      Add Medicine
                     </Button>
                   </div>
-                ))}
+
+                  <div className="space-y-3">
+                    {medicineNames.map((medicine, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-2 rounded-2xl border bg-muted/20 p-3"
+                      >
+                        <Input
+                          value={medicine}
+                          onChange={(e) => handleMedicineChange(index, e.target.value)}
+                          placeholder={`Medicine ${index + 1}`}
+                          className="h-11 rounded-xl"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-11 w-11 rounded-xl"
+                          onClick={() => removeMedicineField(index)}
+                          disabled={medicineNames.length === 1}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 border-t p-4">
-              <Button variant="outline" onClick={closePrescriptionModal} disabled={submitting}>
+            <div className="flex justify-end gap-2 border-t px-6 py-4">
+              <Button
+                variant="outline"
+                className="h-11 rounded-xl"
+                onClick={closePrescriptionModal}
+                disabled={submitting}
+              >
                 Cancel
               </Button>
-              <Button onClick={handleCreatePrescription} disabled={submitting}>
-                {submitting ? "Saving..." : "Save Prescription"}
+              <Button
+                onClick={handleCreatePrescription}
+                disabled={submitting}
+                className="h-11 rounded-xl"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Prescription"
+                )}
               </Button>
             </div>
           </div>

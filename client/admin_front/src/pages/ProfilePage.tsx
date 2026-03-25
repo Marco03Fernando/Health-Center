@@ -1,160 +1,59 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
-  Save,
-  Lock,
-  Clock,
   User,
-  Mail,
-  Phone,
-  Stethoscope,
-  Building2,
-  Wallet,
+  Lock,
   ShieldCheck,
-  Loader2,
+  Mail,
+  UserCircle2,
+  Save,
   Settings,
   CheckCircle2,
 } from "lucide-react";
-import { apiFetch } from "@/lib/api";
 
-type ProfileForm = {
-  fullName: string;
-  email: string;
-  phone: string;
-  specialization: string;
-  clinic: string;
-  fee: string;
-};
+export default function ProfilePage() {
+  const { admin, updateProfile } = useAuth();
 
-type ScheduleForm = {
-  startTime: string;
-  endTime: string;
-  sessionTime: string;
-};
-
-const initialForm: ProfileForm = {
-  fullName: "",
-  email: "",
-  phone: "",
-  specialization: "",
-  clinic: "",
-  fee: "",
-};
-
-const initialSchedule: ScheduleForm = {
-  startTime: "",
-  endTime: "",
-  sessionTime: "",
-};
-
-export default function Profile() {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
-  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
-
-  const [form, setForm] = useState<ProfileForm>(initialForm);
-  const [initialLoadedForm, setInitialLoadedForm] = useState<ProfileForm>(initialForm);
-
-  const [schedule, setSchedule] = useState<ScheduleForm>(initialSchedule);
+  const [name, setName] = useState(admin?.name || "");
+  const [email, setEmail] = useState(admin?.email || "");
+  const [showPwDialog, setShowPwDialog] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        setLoading(true);
-
-        const data = await apiFetch("/doctors/me");
-        const doc = data.doctor;
-
-        const loadedForm = {
-          fullName: doc.fullName || "",
-          email: doc.email || "",
-          phone: doc.phone || "",
-          specialization: doc.specialization || "",
-          clinic: doc.clinic || "",
-          fee: doc.fee?.toString() || "",
-        };
-
-        setForm(loadedForm);
-        setInitialLoadedForm(loadedForm);
-
-        setSchedule({
-          startTime: doc.startTime || "",
-          endTime: doc.endTime || "",
-          sessionTime: doc.sessionTime?.toString() || "",
-        });
-      } catch (err: any) {
-        toast.error(err.message || "Failed to load profile");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadProfile();
-  }, []);
-
-  const handleChange = (field: keyof ProfileForm, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const hasChanges = useMemo(() => {
-    return JSON.stringify(form) !== JSON.stringify(initialLoadedForm);
-  }, [form, initialLoadedForm]);
-
   const initials = useMemo(() => {
-    if (!form.fullName.trim()) return "DR";
-    return form.fullName
+    if (!admin?.name?.trim()) return "A";
+    return admin.name
       .trim()
       .split(" ")
       .slice(0, 2)
       .map((part) => part.charAt(0).toUpperCase())
       .join("");
-  }, [form.fullName]);
+  }, [admin?.name]);
 
-  const handleSave = async () => {
-    try {
-      setSaving(true);
+  const hasChanges = name !== (admin?.name || "") || email !== (admin?.email || "");
 
-      await apiFetch("/doctors/me", {
-        method: "PATCH",
-        body: JSON.stringify({
-          fullName: form.fullName,
-          email: form.email,
-          phone: form.phone,
-          specialization: form.specialization,
-          clinic: form.clinic,
-          fee: Number(form.fee),
-        }),
-      });
-
-      setInitialLoadedForm(form);
-      toast.success("Profile updated successfully");
-    } catch (err: any) {
-      toast.error(err.message || "Update failed");
-    } finally {
-      setSaving(false);
-    }
+  const handleSave = () => {
+    updateProfile({ name, email });
+    toast.success("Profile updated successfully");
   };
 
-  const handleChangePassword = async () => {
+  const handleChangePw = () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
       toast.error("Please fill all password fields");
       return;
@@ -165,45 +64,12 @@ export default function Profile() {
       return;
     }
 
-    try {
-      setChangingPassword(true);
-
-      await apiFetch("/auth/change-password", {
-        method: "PATCH",
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-
-      setShowPasswordDialog(false);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      toast.success("Password changed successfully");
-    } catch (err: any) {
-      toast.error(err.message || "Password change failed");
-    } finally {
-      setChangingPassword(false);
-    }
+    setShowPwDialog(false);
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    toast.success("Password changed successfully");
   };
-
-  const fields: Array<{ key: keyof ProfileForm; label: string; type: string; icon: any }> = [
-    { key: "fullName", label: "Full Name", type: "text", icon: User },
-    { key: "email", label: "Email", type: "email", icon: Mail },
-    { key: "phone", label: "Phone", type: "tel", icon: Phone },
-    { key: "specialization", label: "Specialization", type: "text", icon: Stethoscope },
-    { key: "clinic", label: "Clinic", type: "text", icon: Building2 },
-    { key: "fee", label: "Consultation Fee", type: "number", icon: Wallet },
-  ];
-
-  if (loading) {
-    return (
-      <div className="space-y-6 p-1 md:p-2">
-        <div className="flex items-center justify-center rounded-2xl border border-dashed py-16 text-muted-foreground">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          Loading profile...
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8 p-1 md:p-2">
@@ -212,14 +78,14 @@ export default function Profile() {
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground">
               <Settings className="h-3.5 w-3.5" />
-              Doctor Profile
+              Account Settings
             </div>
 
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">My Profile</h1>
+              <h1 className="text-3xl font-bold tracking-tight">Admin Profile</h1>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">
-                Manage your doctor account details, review your assigned schedule,
-                and keep your profile information up to date.
+                Manage your administrator account details, keep profile information
+                up to date, and maintain account security in one place.
               </p>
             </div>
           </div>
@@ -232,13 +98,11 @@ export default function Profile() {
                 </div>
 
                 <div className="min-w-0">
-                  <p className="truncate text-base font-semibold">
-                    {form.fullName || "Doctor"}
-                  </p>
-                  <p className="truncate text-sm text-muted-foreground">
-                    {form.specialization || "Medical Practitioner"}
-                  </p>
-                  <Badge className="mt-2 rounded-full px-3 py-1">Doctor Account</Badge>
+                  <p className="truncate text-base font-semibold">{admin?.name || "-"}</p>
+                  <p className="truncate text-sm text-muted-foreground">{admin?.email || "-"}</p>
+                  <Badge className="mt-2 rounded-full px-3 py-1 capitalize">
+                    {admin?.role || "admin"}
+                  </Badge>
                 </div>
               </div>
             </CardContent>
@@ -248,24 +112,45 @@ export default function Profile() {
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <Card className="rounded-2xl border shadow-none">
             <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground">Clinic</p>
-              <p className="mt-2 text-base font-semibold">{form.clinic || "-"}</p>
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10">
+                  <UserCircle2 className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Profile Name</p>
+                  <p className="mt-1 text-sm font-semibold">{admin?.name || "-"}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
           <Card className="rounded-2xl border shadow-none">
             <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground">Specialization</p>
-              <p className="mt-2 text-base font-semibold">{form.specialization || "-"}</p>
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/10">
+                  <Mail className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Email Address</p>
+                  <p className="mt-1 truncate text-sm font-semibold">{admin?.email || "-"}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
           <Card className="rounded-2xl border shadow-none">
             <CardContent className="p-5">
-              <p className="text-sm text-muted-foreground">Consultation Fee</p>
-              <p className="mt-2 text-base font-semibold">
-                {form.fee ? `LKR ${Number(form.fee).toLocaleString()}` : "-"}
-              </p>
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/10">
+                  <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Account Role</p>
+                  <p className="mt-1 text-sm font-semibold capitalize">
+                    {admin?.role || "admin"}
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -274,32 +159,40 @@ export default function Profile() {
       <div className="grid gap-5 xl:grid-cols-[1.35fr_0.9fr]">
         <Card className="rounded-3xl border shadow-sm">
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Personal Information</CardTitle>
+            <CardTitle className="text-lg">Profile Information</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Update your doctor profile details used across the system.
+              Update your name and email used for the administrator account.
             </p>
           </CardHeader>
 
           <CardContent className="space-y-6 pt-3">
-            <div className="grid gap-5 sm:grid-cols-2">
-              {fields.map((field) => {
-                const Icon = field.icon;
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <div className="relative">
+                  <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    className="h-11 rounded-xl pl-10"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Enter your full name"
+                  />
+                </div>
+              </div>
 
-                return (
-                  <div key={field.key} className="space-y-2">
-                    <Label>{field.label}</Label>
-                    <div className="relative">
-                      <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        type={field.type}
-                        value={form[field.key]}
-                        onChange={(e) => handleChange(field.key, e.target.value)}
-                        className="h-11 rounded-xl pl-10"
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="email"
+                    className="h-11 rounded-xl pl-10"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="rounded-2xl border bg-muted/20 p-4">
@@ -329,18 +222,14 @@ export default function Profile() {
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button
                 onClick={handleSave}
-                disabled={!hasChanges || saving}
                 className="h-11 rounded-xl px-5"
+                disabled={!hasChanges}
               >
-                {saving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" />
-                )}
+                <Save className="mr-2 h-4 w-4" />
                 Save Changes
               </Button>
 
-              <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+              <Dialog open={showPwDialog} onOpenChange={setShowPwDialog}>
                 <DialogTrigger asChild>
                   <Button variant="outline" className="h-11 rounded-xl px-5">
                     <Lock className="mr-2 h-4 w-4" />
@@ -352,7 +241,7 @@ export default function Profile() {
                   <DialogHeader className="border-b bg-background px-6 py-5">
                     <DialogTitle className="text-xl">Change Password</DialogTitle>
                     <DialogDescription>
-                      Update your password to keep your doctor account secure.
+                      Update your account password to keep your admin account secure.
                     </DialogDescription>
                   </DialogHeader>
 
@@ -396,22 +285,16 @@ export default function Profile() {
                           <CheckCircle2 className="mt-0.5 h-4 w-4 text-muted-foreground" />
                           <p className="text-sm text-muted-foreground">
                             Use a strong password with a mix of letters, numbers,
-                            and symbols for better account security.
+                            and symbols for better security.
                           </p>
                         </div>
                       </div>
 
                       <div className="flex justify-end">
                         <Button
-                          onClick={handleChangePassword}
-                          disabled={changingPassword}
+                          onClick={handleChangePw}
                           className="h-11 rounded-xl px-5"
                         >
-                          {changingPassword ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Lock className="mr-2 h-4 w-4" />
-                          )}
                           Update Password
                         </Button>
                       </div>
@@ -426,30 +309,31 @@ export default function Profile() {
         <div className="space-y-5">
           <Card className="rounded-3xl border shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Clock className="h-5 w-5 text-primary" />
-                Working Hours
-              </CardTitle>
+              <CardTitle className="text-lg">Account Summary</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Your assigned working hours are managed by the system.
+                Quick overview of your administrator account.
               </p>
             </CardHeader>
 
             <CardContent className="space-y-3 pt-3">
               <div className="flex items-center justify-between rounded-2xl border bg-muted/20 px-4 py-3">
-                <span className="text-sm text-muted-foreground">Start Time</span>
-                <span className="text-sm font-semibold">{schedule.startTime || "-"}</span>
+                <span className="text-sm text-muted-foreground">Full Name</span>
+                <span className="max-w-[55%] truncate text-sm font-semibold">
+                  {admin?.name || "-"}
+                </span>
               </div>
 
               <div className="flex items-center justify-between rounded-2xl border bg-muted/20 px-4 py-3">
-                <span className="text-sm text-muted-foreground">End Time</span>
-                <span className="text-sm font-semibold">{schedule.endTime || "-"}</span>
+                <span className="text-sm text-muted-foreground">Email</span>
+                <span className="max-w-[55%] truncate text-sm font-semibold">
+                  {admin?.email || "-"}
+                </span>
               </div>
 
               <div className="flex items-center justify-between rounded-2xl border bg-muted/20 px-4 py-3">
-                <span className="text-sm text-muted-foreground">Session Time</span>
-                <span className="text-sm font-semibold">
-                  {schedule.sessionTime ? `${schedule.sessionTime} min` : "-"}
+                <span className="text-sm text-muted-foreground">Role</span>
+                <span className="text-sm font-semibold capitalize">
+                  {admin?.role || "admin"}
                 </span>
               </div>
             </CardContent>
@@ -457,12 +341,9 @@ export default function Profile() {
 
           <Card className="rounded-3xl border shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <ShieldCheck className="h-5 w-5 text-primary" />
-                Account Security
-              </CardTitle>
+              <CardTitle className="text-lg">Security</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Basic recommendations for keeping your account safe.
+                Basic account safety recommendations.
               </p>
             </CardHeader>
 
@@ -470,22 +351,20 @@ export default function Profile() {
               <div className="rounded-2xl border bg-muted/20 p-4">
                 <p className="text-sm font-medium">Password protection</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Change your password regularly and do not share it with others.
+                  Change your password regularly and avoid reusing old passwords.
                 </p>
               </div>
 
               <div className="rounded-2xl border bg-muted/20 p-4">
-                <p className="text-sm font-medium">Profile accuracy</p>
+                <p className="text-sm font-medium">Account identity</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Keep your contact details, clinic name, and specialization up to date.
+                  Make sure your displayed name and email stay accurate for admin activity.
                 </p>
               </div>
             </CardContent>
           </Card>
         </div>
       </div>
-
-      <Separator />
     </div>
   );
 }
