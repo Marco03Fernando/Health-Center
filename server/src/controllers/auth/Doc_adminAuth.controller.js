@@ -60,15 +60,26 @@ async function loginAdmin(req, res) {
       accountType: "admin",
     });
 
-    return res.json({
-      message: "Admin login successful",
-      admin: {
-        id: admin._id,
-        name: admin.name,
-        email: admin.email,
-        role: admin.role,
-      },
-      token,
+    // Make admin login work like doctor/user session login
+    req.session.userId = admin._id.toString();
+    req.session.role = admin.role;
+    req.session.accountType = "admin";
+
+    return req.session.save((saveErr) => {
+      if (saveErr) {
+        return res.status(500).json({ message: "Failed to create session" });
+      }
+
+      return res.json({
+        message: "Admin login successful",
+        admin: {
+          id: admin._id,
+          name: admin.name,
+          email: admin.email,
+          role: admin.role,
+        },
+        token,
+      });
     });
   } catch (err) {
     return res.status(500).json({ message: err.message });

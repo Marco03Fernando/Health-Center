@@ -16,12 +16,30 @@ function assertObjectId(id, name = "id") {
  * Helpers for slot generation
  */
 function toMin(hhmm) {
-  const [h, m] = String(hhmm).split(":").map(Number);
-  if (Number.isNaN(h) || Number.isNaN(m)) {
-    const err = new Error("Invalid time format. Use HH:mm (example: 09:00)");
+  const parts = String(hhmm).split(":");
+
+  if (parts.length < 2) {
+    const err = new Error("Invalid time format. Use HH:mm");
     err.status = 400;
     throw err;
   }
+
+  const h = Number(parts[0]);
+  const m = Number(parts[1]);
+
+  if (
+    Number.isNaN(h) ||
+    Number.isNaN(m) ||
+    h < 0 ||
+    h > 23 ||
+    m < 0 ||
+    m > 59
+  ) {
+    const err = new Error("Invalid time format. Use HH:mm");
+    err.status = 400;
+    throw err;
+  }
+
   return h * 60 + m;
 }
 
@@ -34,12 +52,14 @@ function toHHMM(min) {
 function buildSlots({ startTime, endTime, durationMin }) {
   const start = toMin(startTime);
   const end = toMin(endTime);
+  const step = Number(durationMin);
 
-  if (!Number.isInteger(durationMin) || durationMin <= 0) {
-    const err = new Error("sessionTime/durationMin must be a positive integer (example: 15)");
+  if (!Number.isInteger(step) || step <= 0) {
+    const err = new Error("sessionTime must be a positive integer");
     err.status = 400;
     throw err;
   }
+
   if (end <= start) {
     const err = new Error("endTime must be after startTime");
     err.status = 400;
@@ -47,26 +67,48 @@ function buildSlots({ startTime, endTime, durationMin }) {
   }
 
   const slots = [];
-  for (let t = start; t + durationMin <= end; t += durationMin) {
+  let current = start;
+
+  while (current + step <= end) {
     slots.push({
-      startTime: toHHMM(t),
-      endTime: toHHMM(t + durationMin),
+      startTime: toHHMM(current),
+      endTime: toHHMM(current + step),
     });
+    current += step;
   }
+
   return slots;
 }
 
-// Controller Method for Creating a Doctor (+ optional slot auto-generation)
+function pickDefined(obj) {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([_, v]) => v !== undefined)
+  );
+}
+
+function normalizeDates(date, dates) {
+  if (Array.isArray(dates) && dates.length > 0) {
+    return [...new Set(dates.map((d) => String(d).trim()).filter(Boolean))];
+  }
+
+  if (date) {
+    return [String(date).trim()];
+  }
+
+  return [];
+}
+
+// Create doctor + doctor login account + slot generation
 async function create(req, res) {
   try {
     const {
-      // User account fields
+      // user account
       fullName,
       email,
       password,
       phone,
 
-      // Doctor profile fields
+      // doctor profile
       name,
       centerId,
       specialization,
@@ -74,12 +116,12 @@ async function create(req, res) {
       fee,
       isActive,
 
-      // Schedule fields
+      // schedule
       startTime,
       endTime,
       sessionTime,
 
-      // Slot generation
+      // slot generation
       date,
       dates,
       generateSlots,
@@ -87,56 +129,81 @@ async function create(req, res) {
       durationMin,
     } = req.body;
 
-    // Basic validations
-    if (!fullName || !email || !password || !phone) {
+    const doctorName = (name || fullName || "").trim();
+    const userFullName = (fullName || name || "").trim();
+
+    if (
+      !doctorName ||
+      !userFullName ||
+      !email ||
+      !password ||
+      !phone ||
+      !centerId ||
+      !specialization ||
+      !clinic ||
+      fee === undefined ||
+      fee === null
+    ) {
       return res.status(400).json({
-        message: "fullName, email, phone and password are required for doctor account creation",
+        message:
+          "name/fullName, email, password, phone, centerId, specialization, clinic and fee are required",
       });
     }
 
-    const existingUser = await User.findOne({ email });
+    assertObjectId(centerId, "centerId");
+
+    const existingUser = await User.findOne({ email: String(email).trim() }).lean();
     if (existingUser) {
       return res.status(400).json({ message: "A user with this email already exists" });
     }
 
-    // 1. Create login account for doctor
     const user = await User.create({
-      fullName,
-      phone,
-      email,
+      fullName: userFullName,
+      phone: String(phone).trim(),
+      email: String(email).trim(),
       password,
       role: "doctor",
       mustChangePassword: true,
       isActive: isActive ?? true,
     });
 
-    // 2. Create doctor profile linked to user
     const doctor = await Doctor.create({
       userId: user._id,
-      name,
+      name: doctorName,
       centerId,
-      specialization,
-      clinic,
-      fee,
-      phone,
-      startTime,
-      endTime,
-      sessionTime,
+      specialization: String(specialization).trim(),
+      clinic: String(clinic).trim(),
+      fee: Number(fee),
+      phone: String(phone).trim(),
+      startTime: startTime ? String(startTime).trim() : undefined,
+      endTime: endTime ? String(endTime).trim() : undefined,
+      sessionTime:
+        sessionTime !== undefined && sessionTime !== null && sessionTime !== ""
+          ? Number(sessionTime)
+          : undefined,
       isActive: isActive ?? true,
     });
 
-    /**
-     * AUTO GENERATE SLOTS
-     */
-    const shouldGenerate =
-      (generateSlots ?? true) &&
-      (Array.isArray(dates) ? dates.length > 0 : !!date) &&
-      !!startTime &&
-      !!endTime &&
-      ((sessionTime !== undefined && sessionTime !== null) ||
-        (durationMin !== undefined && durationMin !== null));
+    const normalizedDates = normalizeDates(date, dates);
 
-    if (!shouldGenerate) {
+    const slotLen =
+      sessionTime !== undefined && sessionTime !== null && sessionTime !== ""
+        ? Number(sessionTime)
+        : durationMin !== undefined && durationMin !== null && durationMin !== ""
+        ? Number(durationMin)
+        : null;
+
+    const wantsSlots = generateSlots !== false;
+
+    if (
+      !wantsSlots ||
+      normalizedDates.length === 0 ||
+      !startTime ||
+      !endTime ||
+      !slotLen ||
+      !Number.isInteger(slotLen) ||
+      slotLen <= 0
+    ) {
       return res.status(201).json({
         message: "Doctor account and profile created successfully",
         user: {
@@ -145,30 +212,65 @@ async function create(req, res) {
           email: user.email,
           role: user.role,
           mustChangePassword: user.mustChangePassword,
+          isActive: user.isActive,
         },
         doctor,
+        slots: {
+          created: false,
+          reason: "Missing or invalid slot generation inputs",
+          received: {
+            generateSlots: wantsSlots,
+            dates: normalizedDates,
+            startTime,
+            endTime,
+            sessionTime: slotLen,
+          },
+        },
       });
     }
 
-    const dateList = Array.isArray(dates) && dates.length ? dates : [date];
-    const slotLen = Number.isInteger(Number(sessionTime))
-      ? parseInt(sessionTime, 10)
-      : parseInt(durationMin, 10);
+    const pieces = buildSlots({
+      startTime: String(startTime).trim(),
+      endTime: String(endTime).trim(),
+      durationMin: slotLen,
+    });
 
-    const pieces = buildSlots({ startTime, endTime, durationMin: slotLen });
+    if (!pieces.length) {
+      return res.status(201).json({
+        message: "Doctor account and profile created successfully",
+        user: {
+          id: user._id,
+          fullName: user.fullName,
+          email: user.email,
+          role: user.role,
+          mustChangePassword: user.mustChangePassword,
+          isActive: user.isActive,
+        },
+        doctor,
+        slots: {
+          created: false,
+          reason: "No valid slot range generated",
+          received: {
+            dates: normalizedDates,
+            startTime,
+            endTime,
+            sessionTime: slotLen,
+          },
+        },
+      });
+    }
 
     if (regenerate) {
       await Slot.deleteMany({
         centerId,
         doctorId: doctor._id,
-        date: { $in: dateList },
+        date: { $in: normalizedDates },
         isBooked: false,
-        startTime: { $gte: startTime, $lt: endTime },
       });
     }
 
     const slotDocs = [];
-    for (const d of dateList) {
+    for (const d of normalizedDates) {
       for (const p of pieces) {
         slotDocs.push({
           centerId,
@@ -183,12 +285,16 @@ async function create(req, res) {
     }
 
     let inserted = 0;
+
     try {
       const result = await Slot.insertMany(slotDocs, { ordered: false });
-      inserted = result.length;
+      inserted = Array.isArray(result) ? result.length : 0;
     } catch (err) {
       if (err && err.writeErrors) {
-        inserted = err.result?.result?.nInserted ?? 0;
+        inserted =
+          Array.isArray(err.insertedDocs)
+            ? err.insertedDocs.length
+            : err.result?.nInserted || err.result?.result?.nInserted || 0;
       } else {
         throw err;
       }
@@ -202,15 +308,18 @@ async function create(req, res) {
         email: user.email,
         role: user.role,
         mustChangePassword: user.mustChangePassword,
+        isActive: user.isActive,
       },
       doctor,
       slots: {
+        created: true,
         requested: slotDocs.length,
         inserted,
+        dates: normalizedDates,
+        startTime: String(startTime).trim(),
+        endTime: String(endTime).trim(),
         sessionTime: slotLen,
-        dates: dateList,
-        startTime,
-        endTime,
+        generatedSlotsPerDay: pieces,
       },
     });
   } catch (err) {
@@ -218,7 +327,7 @@ async function create(req, res) {
   }
 }
 
-// Controller Method for Getting a Doctor by ID
+// Get doctor by ID
 async function getById(req, res) {
   try {
     const { id } = req.params;
@@ -237,7 +346,7 @@ async function getById(req, res) {
   }
 }
 
-// Controller Method for Listing Doctors (with filters)
+// List doctors
 async function list(req, res) {
   try {
     const {
@@ -256,8 +365,10 @@ async function list(req, res) {
       assertObjectId(centerId, "centerId");
       filter.centerId = centerId;
     }
+
     if (specialization) filter.specialization = specialization;
     if (clinic) filter.clinic = clinic;
+
     if (isActive === undefined) filter.isActive = true;
     else filter.isActive = isActive === "true";
 
@@ -268,7 +379,12 @@ async function list(req, res) {
     const skip = (safePage - 1) * safeLimit;
 
     const [items, total] = await Promise.all([
-      Doctor.find(filter).sort({ createdAt: -1 }).skip(skip).limit(safeLimit).lean(),
+      Doctor.find(filter)
+        .populate("centerId", "name location")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(safeLimit)
+        .lean(),
       Doctor.countDocuments(filter),
     ]);
 
@@ -286,10 +402,13 @@ async function list(req, res) {
   }
 }
 
-// Controller Method for Updating a Doctor
+// Update doctor by admin
 async function update(req, res) {
   try {
     const { id } = req.params;
+
+    assertObjectId(id, "doctor id");
+
     const {
       name,
       centerId,
@@ -303,9 +422,11 @@ async function update(req, res) {
       sessionTime,
     } = req.body;
 
-    assertObjectId(id, "doctor id");
+    if (centerId !== undefined) {
+      assertObjectId(centerId, "centerId");
+    }
 
-    const patch = {
+    const patch = pickDefined({
       name,
       centerId,
       specialization,
@@ -316,7 +437,7 @@ async function update(req, res) {
       startTime,
       endTime,
       sessionTime,
-    };
+    });
 
     const updated = await Doctor.findByIdAndUpdate(
       id,
@@ -330,23 +451,40 @@ async function update(req, res) {
       throw err;
     }
 
-    return res.json({ doctor: updated });
+    if (phone !== undefined || isActive !== undefined) {
+      await User.findByIdAndUpdate(
+        updated.userId,
+        {
+          $set: pickDefined({
+            phone,
+            isActive,
+          }),
+        },
+        { new: true, runValidators: true }
+      );
+    }
+
+    return res.json({
+      message: "Doctor updated successfully",
+      doctor: updated,
+    });
   } catch (err) {
     return res.status(err.status || 500).json({ message: err.message });
   }
 }
 
-// Controller Method for Setting Doctor's Active Status
+// Set active/inactive
 async function setActive(req, res) {
   try {
     const { id } = req.params;
     const { isActive } = req.body;
+
     assertObjectId(id, "doctor id");
 
     const updated = await Doctor.findByIdAndUpdate(
       id,
       { $set: { isActive: !!isActive } },
-      { new: true }
+      { new: true, runValidators: true }
     ).lean();
 
     if (!updated) {
@@ -355,13 +493,20 @@ async function setActive(req, res) {
       throw err;
     }
 
-    return res.json({ doctor: updated });
+    if (updated.userId) {
+      await User.findByIdAndUpdate(updated.userId, { $set: { isActive: !!isActive } });
+    }
+
+    return res.json({
+      message: "Doctor active status updated successfully",
+      doctor: updated,
+    });
   } catch (err) {
     return res.status(err.status || 500).json({ message: err.message });
   }
 }
 
-// Controller method for updating the doctor's own profile
+// Doctor self profile update
 async function updateProfile(req, res) {
   try {
     const userId = req.userId;
@@ -382,14 +527,16 @@ async function updateProfile(req, res) {
     const updatedDoctor = await Doctor.findOneAndUpdate(
       { userId },
       {
-        name,
-        specialization,
-        clinic,
-        fee,
-        phone,
-        startTime,
-        endTime,
-        sessionTime,
+        $set: pickDefined({
+          name,
+          specialization,
+          clinic,
+          fee,
+          phone,
+          startTime,
+          endTime,
+          sessionTime,
+        }),
       },
       { new: true, runValidators: true }
     );
@@ -401,11 +548,11 @@ async function updateProfile(req, res) {
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       {
-        $set: {
-          ...(fullName !== undefined ? { fullName } : {}),
-          ...(email !== undefined ? { email } : {}),
-          ...(phone !== undefined ? { phone } : {}),
-        },
+        $set: pickDefined({
+          fullName,
+          email,
+          phone,
+        }),
       },
       { new: true, runValidators: true }
     ).select("fullName email phone role mustChangePassword");

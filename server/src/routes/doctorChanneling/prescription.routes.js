@@ -6,22 +6,22 @@ const { protect } = require("../../middlewares/auth.middleware");
 const { allowRoles } = require("../../middlewares/role.middleware");
 const { protectDoctorRoute } = require("../../middlewares/protectDoctorRoute");
 
-// Doctor frontend (session-based)
+// Doctor frontend
 router.get("/doctor/me", protectDoctorRoute, controller.listByDoctor);
+
+// List prescriptions - doctor, pharmacy, admin, superadmin
+router.get("/", protect, allowRoles("doctor", "pharmacy", "admin", "superadmin"), controller.list);
 
 // Create prescription - doctor only
 router.post("/", protect, allowRoles("doctor"), controller.create);
 
-// PDF download - doctor, patient, pharmacy, and admin
-router.get("/:id/pdf", protect, allowRoles("doctor", "patient", "pharmacy", "admin"), controller.downloadPdf);
+// PDF download - doctor, patient, pharmacy, admin, superadmin
+router.get("/:id/pdf", protect, allowRoles("doctor", "patient", "pharmacy", "admin", "superadmin"), controller.downloadPdf);
 
-// Get one prescription - doctor, patient, pharmacy, admin
-router.get("/:id", protect, allowRoles("doctor", "patient", "pharmacy", "admin"), controller.getById);
+// Get one prescription - doctor, patient, pharmacy, admin, superadmin
+router.get("/:id", protect, allowRoles("doctor", "patient", "pharmacy", "admin", "superadmin"), controller.getById);
 
-// List prescriptions - doctor, pharmacy, admin
-router.get("/", protect, allowRoles("doctor", "pharmacy", "admin"), controller.list);
-
-// Pharmacy dispense - pharmacy only
-router.patch("/:id/dispense", protect, allowRoles("pharmacy", "admin"), controller.markDispensed);
+// Pharmacy dispense - pharmacy, admin, superadmin
+router.patch("/:id/dispense", protect, allowRoles("pharmacy", "admin", "superadmin"), controller.markDispensed);
 
 module.exports = router;

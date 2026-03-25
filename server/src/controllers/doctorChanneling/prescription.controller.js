@@ -12,7 +12,7 @@ async function getNextPrescriptionNo(session) {
   const c = await Counter.findOneAndUpdate(
     { key: "prescription" },
     { $inc: { seq: 1 } },
-    { new: true, upsert: true, session }
+    { returnDocument: "after", upsert: true, session }
   ).lean();
 
   return "P" + String(c.seq).padStart(4, "0");
@@ -75,9 +75,9 @@ async function create(req, res, next) {
         { session }
       );
 
-  appt.status = "completed";
-appt.statusUpdatedAt = new Date();
-appt.statusUpdatedBy = "doctor";
+      appt.status = "completed";
+      appt.statusUpdatedAt = new Date();
+      appt.statusUpdatedBy = "doctor";
 
       await appt.save({ session });
 
@@ -133,14 +133,17 @@ async function list(req, res, next) {
     const { centerId, userId, status, q, page = 1, limit = 20 } = req.query;
 
     const filter = {};
+
     if (centerId) {
       if (!mongoose.Types.ObjectId.isValid(centerId)) throw new ApiError(400, "Invalid centerId");
       filter.centerId = centerId;
     }
+
     if (userId) {
       if (!mongoose.Types.ObjectId.isValid(userId)) throw new ApiError(400, "Invalid userId");
       filter.userId = userId;
     }
+
     if (status) filter.status = status;
 
     if (q) {
@@ -155,7 +158,19 @@ async function list(req, res, next) {
     const skip = (safePage - 1) * safeLimit;
 
     const [items, total] = await Promise.all([
-      Prescription.find(filter).sort({ createdAt: -1 }).skip(skip).limit(safeLimit).lean(),
+      Prescription.find(filter)
+        .populate("doctorId", "name specialization clinic fee phone")
+        .populate("centerId", "name district")
+        .populate("userId", "fullName email phone role")
+        .populate({
+          path: "appointmentId",
+          select: "status createdAt slotId",
+          populate: { path: "slotId", select: "date startTime endTime" },
+        })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(safeLimit)
+        .lean(),
       Prescription.countDocuments(filter),
     ]);
 
@@ -196,6 +211,8 @@ async function listByDoctor(req, res, next) {
 
     const [items, total] = await Promise.all([
       Prescription.find(filter)
+        .populate("doctorId", "name specialization clinic fee phone")
+        .populate("centerId", "name district")
         .populate("userId", "fullName email phone")
         .populate({
           path: "appointmentId",
@@ -243,8 +260,17 @@ async function markDispensed(req, res, next) {
           "pharmacy.remarks": remarks || "",
         },
       },
-      { new: true }
-    ).lean();
+      { returnDocument: "after" }
+    )
+      .populate("doctorId", "name specialization clinic fee phone")
+      .populate("centerId", "name district")
+      .populate("userId", "fullName email phone role")
+      .populate({
+        path: "appointmentId",
+        select: "status createdAt slotId",
+        populate: { path: "slotId", select: "date startTime endTime" },
+      })
+      .lean();
 
     if (!updated) throw new ApiError(404, "Prescription not found");
     return res.json({ success: true, data: updated });
