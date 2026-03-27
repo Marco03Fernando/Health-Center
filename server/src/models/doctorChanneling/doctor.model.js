@@ -24,14 +24,27 @@ const doctorSchema = new mongoose.Schema(
     },
 
     startTime: { type: String, trim: true }, // "09:00"
-    endTime: { type: String, trim: true },   // "11:00"
-    sessionTime: { type: Number, min: 1 },   // 15 (minutes)
+    endTime: { type: String, trim: true },   // "17:00"
+    sessionTime: { type: Number, min: 1 },   // minutes
+
+    workingDays: {
+      type: [String],
+      enum: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+      default: ["mon", "tue", "wed", "thu", "fri"],
+    },
+
+    holidayDates: {
+      type: [String], // ["2026-04-10", "2026-04-11"]
+      default: [],
+    },
 
     isActive: { type: Boolean, default: true, index: true },
   },
   { timestamps: true }
 );
 
-doctorSchema.index({ centerId: 1, isActive: 1, specialization: 1 });
+doctorSchema.index({ centerId: 1, isActive: 1 });
+doctorSchema.index({ specialization: 1 });
+doctorSchema.index({ clinic: 1 });
 
 module.exports = mongoose.model("Doctor", doctorSchema, "doctors");

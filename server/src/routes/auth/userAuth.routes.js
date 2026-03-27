@@ -5,6 +5,7 @@ const {
   registerPatient,
   loginUser,
   getMe,
+  updateMe,
   changePassword,
   logoutUser,
 } = require("../../controllers/auth/userAuth.controller");
@@ -15,6 +16,7 @@ router.post("/register", registerPatient);
 router.post("/login", loginUser);
 router.post("/logout", logoutUser);
 router.get("/me", protect, getMe);
+router.patch("/me", protect, updateMe);
 router.patch("/change-password", protect, changePassword);
 
 module.exports = router;

@@ -145,6 +145,66 @@ async function getMe(req, res) {
   }
 }
 
+// Update logged-in user's profile
+async function updateMe(req, res) {
+  try {
+    const { fullName, phone, email } = req.body;
+    const userId = req.user?._id || req.userId;
+
+    if (!fullName || !phone || !email) {
+      return res.status(400).json({
+        message: "fullName, phone and email are required",
+      });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+
+    const existingUser = await User.findOne({
+      email: normalizedEmail,
+      _id: { $ne: userId },
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ message: "Email already in use" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      {
+        fullName: String(fullName).trim(),
+        phone: String(phone).trim(),
+        email: normalizedEmail,
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    let doctorProfileId = null;
+    if (user.role === "doctor") {
+      const doctorProfile = await Doctor.findOne({ userId: user._id }).select("_id");
+      doctorProfileId = doctorProfile ? doctorProfile._id : null;
+    }
+
+    return res.json({
+      message: "Profile updated successfully",
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        mustChangePassword: user.mustChangePassword,
+        doctorProfileId,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+}
+
 // Change password for logged-in user
 async function changePassword(req, res) {
   try {
@@ -152,6 +212,10 @@ async function changePassword(req, res) {
 
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ message: "currentPassword and newPassword are required" });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: "New password must be at least 6 characters" });
     }
 
     const userId = req.user?._id || req.userId;
@@ -192,4 +256,11 @@ async function logoutUser(req, res) {
   }
 }
 
-module.exports = { registerPatient, loginUser, getMe, changePassword, logoutUser };
+module.exports = {
+  registerPatient,
+  loginUser,
+  getMe,
+  updateMe,
+  changePassword,
+  logoutUser,
+};

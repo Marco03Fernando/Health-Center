@@ -7,6 +7,9 @@ const { protectDoctorRoute } = require("../../middlewares/protectDoctorRoute");
 // Booking
 router.post("/", controller.create);
 
+// Patient appointment list
+router.get("/user/:userId", controller.listByUser);
+
 // Logged-in doctor appointment list
 router.get("/doctor/me", protectDoctorRoute, controller.listByDoctor);
 
@@ -15,8 +18,5 @@ router.patch("/:id/status", protectDoctorRoute, controller.updateAppointmentStat
 
 // Cancel appointment
 router.delete("/:id/cancel", controller.cancel);
-
-// Receptionist payment
-// router.patch("/:id/pay", controller.pay);
 
 module.exports = router;

@@ -11,4 +11,19 @@ router.get("/:id", protect, allowRoles("admin", "superadmin"), doctorController.
 router.patch("/:id", protect, allowRoles("admin", "superadmin"), doctorController.update);
 router.patch("/:id/active", protect, allowRoles("admin", "superadmin"), doctorController.setActive);
 
+// Manual slot maintenance
+router.post(
+  "/generate-upcoming-slots",
+  protect,
+  allowRoles("admin", "superadmin"),
+  doctorController.generateUpcomingSlots
+);
+
+router.post(
+  "/cleanup-expired-slots",
+  protect,
+  allowRoles("admin", "superadmin"),
+  doctorController.cleanupExpiredSlots
+);
+
 module.exports = router;

@@ -1,15 +1,21 @@
 const mongoose = require("mongoose");
 const Appointment = require("../../models/doctorChanneling/appointment.model");
 const Slot = require("../../models/doctorChanneling/slot.model");
+const Doctor = require("../../models/doctorChanneling/doctor.model");
 const ApiError = require("../../utils/ApiError");
 
 async function create(req, res, next) {
   try {
-    const { centerId, doctorId, userId, slotId, note } = req.body;
+    const { centerId, doctorId, userId: bodyUserId, slotId, note } = req.body;
+
+    const resolvedUserId =
+      (req.user && (req.user._id || req.user.id)) ||
+      (req.session && req.session.userId) ||
+      bodyUserId;
 
     if (!centerId) throw new ApiError(400, "centerId is required");
     if (!doctorId) throw new ApiError(400, "doctorId is required");
-    if (!userId) throw new ApiError(400, "userId is required");
+    if (!resolvedUserId) throw new ApiError(400, "userId is required");
     if (!slotId) throw new ApiError(400, "slotId is required");
 
     if (!mongoose.Types.ObjectId.isValid(centerId)) {
@@ -18,15 +24,20 @@ async function create(req, res, next) {
     if (!mongoose.Types.ObjectId.isValid(doctorId)) {
       throw new ApiError(400, "Invalid doctorId");
     }
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
+    if (!mongoose.Types.ObjectId.isValid(resolvedUserId)) {
       throw new ApiError(400, "Invalid userId");
     }
     if (!mongoose.Types.ObjectId.isValid(slotId)) {
       throw new ApiError(400, "Invalid slotId");
     }
 
-    const slot = await Slot.findById(slotId);
+    const [slot, doctor] = await Promise.all([
+      Slot.findById(slotId),
+      Doctor.findById(doctorId).lean(),
+    ]);
+
     if (!slot) throw new ApiError(404, "Slot not found");
+    if (!doctor) throw new ApiError(404, "Doctor not found");
 
     if (!slot.isActive) {
       throw new ApiError(400, "Slot is inactive");
@@ -52,7 +63,7 @@ async function create(req, res, next) {
     const created = await Appointment.create({
       centerId,
       doctorId,
-      userId,
+      userId: resolvedUserId,
       slotId,
       note: note || "",
       status: "pending",
@@ -60,7 +71,7 @@ async function create(req, res, next) {
       statusUpdatedBy: "system",
       payment: {
         status: "unpaid",
-        amount: 0,
+        amount: Number(doctor.fee || 0),
         currency: "LKR",
       },
     });
@@ -71,13 +82,92 @@ async function create(req, res, next) {
     const populated = await Appointment.findById(created._id)
       .populate("userId", "fullName email phone")
       .populate("doctorId", "name specialization clinic fee phone")
-      .populate("centerId", "name district")
+      .populate("centerId", "name district address phone")
       .populate("slotId", "date startTime endTime")
       .lean();
 
     return res.status(201).json({
       success: true,
       data: populated,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function listByUser(req, res, next) {
+  try {
+    const { userId } = req.params;
+    const { status, q, page = 1, limit = 20 } = req.query;
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new ApiError(400, "Invalid userId");
+    }
+
+    const filter = { userId };
+
+    if (status) {
+      filter.status = status;
+    }
+
+    const safePage = Math.max(1, parseInt(page, 10) || 1);
+    const safeLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+    const skip = (safePage - 1) * safeLimit;
+
+    if (q && String(q).trim()) {
+      const search = String(q).trim();
+
+      const matchedDoctorIds = await Appointment.db
+        .collection("doctors")
+        .find(
+          {
+            $or: [
+              { name: { $regex: search, $options: "i" } },
+              { specialization: { $regex: search, $options: "i" } },
+              { clinic: { $regex: search, $options: "i" } },
+            ],
+          },
+          { projection: { _id: 1 } }
+        )
+        .toArray();
+
+      const doctorIds = matchedDoctorIds.map((d) => d._id);
+
+      if (doctorIds.length) {
+        filter.$or = [{ doctorId: { $in: doctorIds } }];
+      } else {
+        filter.$or = [{ _id: null }];
+      }
+    }
+
+    const [items, total] = await Promise.all([
+      Appointment.find(filter)
+        .populate({
+          path: "doctorId",
+          select: "name specialization clinic fee phone centerId",
+          populate: {
+            path: "centerId",
+            select: "name district address phone location",
+          },
+        })
+        .populate("centerId", "name district address phone location")
+        .populate("slotId", "date startTime endTime")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(safeLimit)
+        .lean(),
+      Appointment.countDocuments(filter),
+    ]);
+
+    return res.json({
+      success: true,
+      data: items,
+      pagination: {
+        page: safePage,
+        limit: safeLimit,
+        total,
+        pages: Math.ceil(total / safeLimit),
+      },
     });
   } catch (err) {
     next(err);
@@ -156,7 +246,8 @@ async function listByDoctor(req, res, next) {
 async function cancel(req, res, next) {
   try {
     const { id } = req.params;
-    const { userId } = req.query;
+    const bodyUserId =
+      req.query.userId || req.body?.userId || (req.user && (req.user._id || req.user.id));
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new ApiError(400, "Invalid appointment id");
@@ -167,7 +258,7 @@ async function cancel(req, res, next) {
       throw new ApiError(404, "Appointment not found");
     }
 
-    if (userId && String(appointment.userId) !== String(userId)) {
+    if (bodyUserId && String(appointment.userId) !== String(bodyUserId)) {
       throw new ApiError(403, "You can only cancel your own appointment");
     }
 
@@ -248,6 +339,7 @@ async function updateAppointmentStatusByDoctor(req, res, next) {
 
 module.exports = {
   create,
+  listByUser,
   listByDoctor,
   cancel,
   updateAppointmentStatusByDoctor,

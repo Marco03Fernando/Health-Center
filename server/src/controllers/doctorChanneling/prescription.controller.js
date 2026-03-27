@@ -8,6 +8,23 @@ const Counter = require("../../models/doctorChanneling/counter.model");
 const Appointment = require("../../models/doctorChanneling/appointment.model");
 const ApiError = require("../../utils/ApiError");
 
+function getActorRole(req) {
+  return req.user?.role || req.admin?.role || null;
+}
+
+function ensurePatientOwnPrescription(req, prescription) {
+  const role = getActorRole(req);
+
+  if (role === "patient") {
+    const loggedInUserId = req.user?._id;
+    const prescriptionUserId = prescription?.userId?._id || prescription?.userId;
+
+    if (!loggedInUserId || String(prescriptionUserId) !== String(loggedInUserId)) {
+      throw new ApiError(403, "You are not allowed to access this prescription");
+    }
+  }
+}
+
 async function getNextPrescriptionNo(session) {
   const c = await Counter.findOneAndUpdate(
     { key: "prescription" },
@@ -122,6 +139,9 @@ async function getById(req, res, next) {
       .lean();
 
     if (!doc) throw new ApiError(404, "Prescription not found");
+
+    ensurePatientOwnPrescription(req, doc);
+
     return res.json({ success: true, data: doc });
   } catch (err) {
     next(err);
@@ -133,13 +153,19 @@ async function list(req, res, next) {
     const { centerId, userId, status, q, page = 1, limit = 20 } = req.query;
 
     const filter = {};
+    const role = getActorRole(req);
 
     if (centerId) {
       if (!mongoose.Types.ObjectId.isValid(centerId)) throw new ApiError(400, "Invalid centerId");
       filter.centerId = centerId;
     }
 
-    if (userId) {
+    if (role === "patient") {
+      if (!req.user?._id) {
+        throw new ApiError(401, "User not authorized");
+      }
+      filter.userId = req.user._id;
+    } else if (userId) {
       if (!mongoose.Types.ObjectId.isValid(userId)) throw new ApiError(400, "Invalid userId");
       filter.userId = userId;
     }
@@ -482,6 +508,8 @@ async function downloadPdf(req, res, next) {
 
     if (!p) throw new ApiError(404, "Prescription not found");
 
+    ensurePatientOwnPrescription(req, p);
+
     const fileName = `${p.prescriptionNo}.pdf`;
 
     res.setHeader("Content-Type", "application/pdf");
@@ -519,128 +547,80 @@ async function downloadPdf(req, res, next) {
       { label: "Doctor", value: p.doctorId?.name || "-" },
       { label: "Speciality", value: p.doctorId?.specialization || "-" },
       { label: "Clinic", value: p.doctorId?.clinic || "-" },
-      { label: "Status", value: p.status || "issued" },
+      { label: "Center", value: p.centerId?.name || "-" },
     ]);
 
-    doc.y = 245;
+    doc.y = 248;
 
-    if (p.diagnosis) {
-      drawSectionTitle(doc, "Diagnosis");
-      drawTextBox(doc, p.diagnosis, {
-        minHeight: 64,
-        fontSize: 10.5,
-      });
-    }
+    drawSectionTitle(doc, "Diagnosis");
+    drawTextBox(doc, p.diagnosis || "-");
 
+    ensureSpace(doc, 180);
     drawSectionTitle(doc, "Medicines");
 
     const items = Array.isArray(p.items) ? p.items : [];
-
-    if (!items.length) {
-      drawTextBox(doc, "No medicines added.", {
-        minHeight: 50,
-        fontSize: 10,
-        textColor: "#64748b",
-      });
+    if (items.length === 0) {
+      drawTextBox(doc, "No medicines listed.");
     } else {
-      items.forEach((it, idx) => {
-        const instructionText = it.instructions ? String(it.instructions) : "";
-        const medicineName = it.medicineName || "-";
-
-        const meta = [];
-        if (it.dosage) meta.push(`Dosage: ${it.dosage}`);
-        if (it.frequency) meta.push(`Frequency: ${it.frequency}`);
-        if (it.duration) meta.push(`Duration: ${it.duration}`);
-        if (it.quantity) meta.push(`Qty: ${it.quantity}`);
-
-        const metaText = meta.join("   •   ");
-
-        const metaHeight = metaText ? doc.heightOfString(metaText, { width: 390 }) : 0;
-        const instructionHeight = instructionText
-          ? doc.heightOfString(`Instructions: ${instructionText}`, { width: 390 })
-          : 0;
-
-        const boxHeight = Math.max(
-          54,
-          26 + metaHeight + (instructionText ? instructionHeight + 8 : 0) + 18
-        );
-
-        ensureSpace(doc, boxHeight + 20);
+      items.forEach((item, index) => {
+        ensureSpace(doc, 90);
 
         const boxY = doc.y;
-
         doc
-          .roundedRect(50, boxY, 495, boxHeight, 14)
+          .roundedRect(50, boxY, 495, 70, 12)
           .fillColor("#ffffff")
           .strokeColor("#e2e8f0")
           .lineWidth(1)
           .fillAndStroke();
 
-        drawPill(doc, 64, boxY + 14, 22, 12);
-
-        doc
-          .fillColor("#2563eb")
-          .font("Helvetica-Bold")
-          .fontSize(10)
-          .text(String(idx + 1).padStart(2, "0"), 94, boxY + 14, { width: 24 });
+        drawPill(doc, 64, boxY + 18, 34, 18);
 
         doc
           .fillColor("#0f172a")
           .font("Helvetica-Bold")
           .fontSize(11)
-          .text(medicineName, 122, boxY + 13, { width: 380 });
+          .text(`${index + 1}. ${item.medicineName || "-"}`, 110, boxY + 14, {
+            width: 320,
+          });
 
-        let currentY = boxY + 31;
+        doc
+          .font("Helvetica")
+          .fontSize(9.5)
+          .fillColor("#475569")
+          .text(
+            `${item.dosage || "-"} • ${item.frequency || "-"} • ${item.duration || "-"}`,
+            110,
+            boxY + 31,
+            { width: 360 }
+          );
 
-        if (metaText) {
-          doc
-            .fillColor("#64748b")
-            .font("Helvetica")
-            .fontSize(9)
-            .text(metaText, 122, currentY, { width: 390 });
-          currentY += metaHeight + 6;
-        }
+        doc
+          .font("Helvetica")
+          .fontSize(9)
+          .fillColor("#64748b")
+          .text(item.instructions || "-", 110, boxY + 46, { width: 360 });
 
-        if (instructionText) {
-          doc
-            .fillColor("#475569")
-            .font("Helvetica-Oblique")
-            .fontSize(9)
-            .text(`Instructions: ${instructionText}`, 122, currentY, { width: 390 });
-        }
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(9)
+          .fillColor("#0f172a")
+          .text(`Qty: ${item.quantity || 0}`, 455, boxY + 25, {
+            width: 70,
+            align: "right",
+          });
 
-        doc.y = boxY + boxHeight + 12;
+        doc.y = boxY + 86;
       });
     }
 
     if (p.notes) {
-      ensureSpace(doc, 100);
-      drawSectionTitle(doc, "Additional Notes");
-      drawTextBox(doc, p.notes, {
-        minHeight: 60,
-        fontSize: 10,
-        textColor: "#334155",
-      });
+      ensureSpace(doc, 120);
+      drawSectionTitle(doc, "Notes");
+      drawTextBox(doc, p.notes);
     }
 
-    ensureSpace(doc, 90);
-
-    const signY = Math.max(doc.y + 12, 700);
-
-    doc
-      .strokeColor("#cbd5e1")
-      .moveTo(360, signY)
-      .lineTo(520, signY)
-      .stroke();
-
-    doc
-      .fillColor("#475569")
-      .font("Helvetica")
-      .fontSize(9)
-      .text("Doctor Signature", 395, signY + 6);
-
-    const range = doc.bufferedPageRange();
-    for (let i = range.start; i < range.start + range.count; i++) {
+    const pageRange = doc.bufferedPageRange();
+    for (let i = 0; i < pageRange.count; i++) {
       doc.switchToPage(i);
 
       doc
@@ -648,9 +628,9 @@ async function downloadPdf(req, res, next) {
         .fontSize(8)
         .fillColor("#94a3b8")
         .text(
-          `${p.centerId?.name || "Medical Center"} • ${p.prescriptionNo || ""}`,
+          `Generated by ${p.centerId?.name || "Medical Center"} • Page ${i + 1} of ${pageRange.count}`,
           50,
-          805,
+          800,
           { width: 495, align: "center" }
         );
     }

@@ -3,6 +3,9 @@ const Doctor = require("../../models/doctorChanneling/doctor.model");
 const Slot = require("../../models/doctorChanneling/slot.model");
 const User = require("../../models/doctorChanneling/user.model");
 
+const DEFAULT_SLOT_WINDOW_DAYS = 14;
+const VALID_WORKING_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
 // Function to validate ObjectId
 function assertObjectId(id, name = "id") {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -86,19 +89,275 @@ function pickDefined(obj) {
   );
 }
 
-function normalizeDates(date, dates) {
+function isValidDateString(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value).trim());
+}
+
+function getTodayDateString() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function addDaysToDateString(baseDateString, daysToAdd) {
+  const d = new Date(`${baseDateString}T00:00:00`);
+  d.setDate(d.getDate() + Number(daysToAdd || 0));
+
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function getRollingDates(days = DEFAULT_SLOT_WINDOW_DAYS, fromDate = getTodayDateString()) {
+  const totalDays = Number(days);
+
+  if (!Number.isInteger(totalDays) || totalDays <= 0) {
+    return [];
+  }
+
+  const result = [];
+  for (let i = 0; i < totalDays; i += 1) {
+    result.push(addDaysToDateString(fromDate, i));
+  }
+
+  return result;
+}
+
+function normalizeDates(date, dates, fallbackWindowDays = DEFAULT_SLOT_WINDOW_DAYS) {
   if (Array.isArray(dates) && dates.length > 0) {
-    return [...new Set(dates.map((d) => String(d).trim()).filter(Boolean))];
+    return [
+      ...new Set(
+        dates.map((d) => String(d).trim()).filter((d) => d && isValidDateString(d))
+      ),
+    ];
   }
 
   if (date) {
-    return [String(date).trim()];
+    const one = String(date).trim();
+    return isValidDateString(one) ? [one] : [];
   }
 
-  return [];
+  return getRollingDates(fallbackWindowDays);
 }
 
-// Create doctor + doctor login account + slot generation
+function normalizeWorkingDays(workingDays) {
+  if (!Array.isArray(workingDays) || workingDays.length === 0) {
+    return ["mon", "tue", "wed", "thu", "fri"];
+  }
+
+  const cleaned = [
+    ...new Set(
+      workingDays
+        .map((d) => String(d).trim().toLowerCase())
+        .filter((d) => VALID_WORKING_DAYS.includes(d))
+    ),
+  ];
+
+  return cleaned.length ? cleaned : ["mon", "tue", "wed", "thu", "fri"];
+}
+
+function normalizeHolidayDates(holidayDates) {
+  if (!Array.isArray(holidayDates) || holidayDates.length === 0) {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      holidayDates
+        .map((d) => String(d).trim())
+        .filter((d) => d && isValidDateString(d))
+    ),
+  ];
+}
+
+function getDayKeyFromDateString(dateString) {
+  const date = new Date(`${dateString}T00:00:00`);
+  const day = date.getDay(); // 0=sun ... 6=sat
+  const map = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  return map[day];
+}
+
+function filterDatesBySchedule(dates, workingDays = [], holidayDates = []) {
+  const workingDaySet = new Set(normalizeWorkingDays(workingDays));
+  const holidaySet = new Set(normalizeHolidayDates(holidayDates));
+
+  return dates.filter((date) => {
+    if (!isValidDateString(date)) return false;
+    if (holidaySet.has(date)) return false;
+
+    const dayKey = getDayKeyFromDateString(date);
+    return workingDaySet.has(dayKey);
+  });
+}
+
+async function insertSlotDocs(slotDocs) {
+  let inserted = 0;
+
+  try {
+    const result = await Slot.insertMany(slotDocs, { ordered: false });
+    inserted = Array.isArray(result) ? result.length : 0;
+  } catch (err) {
+    if (err && err.writeErrors) {
+      inserted =
+        Array.isArray(err.insertedDocs)
+          ? err.insertedDocs.length
+          : err.result?.nInserted || err.result?.result?.nInserted || 0;
+    } else {
+      throw err;
+    }
+  }
+
+  return inserted;
+}
+
+async function createSlotsForDoctor({
+  doctor,
+  centerId,
+  startTime,
+  endTime,
+  sessionTime,
+  dates,
+  workingDays,
+  holidayDates,
+  regenerate = false,
+}) {
+  const trimmedStart = startTime ? String(startTime).trim() : "";
+  const trimmedEnd = endTime ? String(endTime).trim() : "";
+  const slotLen =
+    sessionTime !== undefined && sessionTime !== null && sessionTime !== ""
+      ? Number(sessionTime)
+      : null;
+
+  if (
+    !doctor ||
+    !centerId ||
+    !trimmedStart ||
+    !trimmedEnd ||
+    !slotLen ||
+    !Number.isInteger(slotLen) ||
+    slotLen <= 0 ||
+    !Array.isArray(dates) ||
+    dates.length === 0
+  ) {
+    return {
+      created: false,
+      requested: 0,
+      inserted: 0,
+      dates: Array.isArray(dates) ? dates : [],
+      actualDates: [],
+      generatedSlotsPerDay: [],
+      reason: "Missing or invalid slot generation inputs",
+    };
+  }
+
+  const filteredDates = filterDatesBySchedule(
+    dates,
+    workingDays || doctor.workingDays || [],
+    holidayDates || doctor.holidayDates || []
+  );
+
+  const pieces = buildSlots({
+    startTime: trimmedStart,
+    endTime: trimmedEnd,
+    durationMin: slotLen,
+  });
+
+  if (!pieces.length) {
+    return {
+      created: false,
+      requested: 0,
+      inserted: 0,
+      dates,
+      actualDates: filteredDates,
+      generatedSlotsPerDay: [],
+      reason: "No valid slot range generated",
+    };
+  }
+
+  if (!filteredDates.length) {
+    return {
+      created: true,
+      requested: 0,
+      inserted: 0,
+      dates,
+      actualDates: [],
+      generatedSlotsPerDay: pieces,
+      reason: "No matching working days after excluding holidays",
+    };
+  }
+
+  if (regenerate) {
+    await Slot.deleteMany({
+      centerId,
+      doctorId: doctor._id,
+      date: { $in: filteredDates },
+      isBooked: false,
+    });
+  }
+
+  const slotDocs = [];
+  for (const d of filteredDates) {
+    for (const p of pieces) {
+      slotDocs.push({
+        centerId,
+        doctorId: doctor._id,
+        date: d,
+        startTime: p.startTime,
+        endTime: p.endTime,
+        isBooked: false,
+        isActive: true,
+      });
+    }
+  }
+
+  const inserted = await insertSlotDocs(slotDocs);
+
+  return {
+    created: true,
+    requested: slotDocs.length,
+    inserted,
+    dates,
+    actualDates: filteredDates,
+    startTime: trimmedStart,
+    endTime: trimmedEnd,
+    sessionTime: slotLen,
+    workingDays: normalizeWorkingDays(workingDays || doctor.workingDays || []),
+    holidayDates: normalizeHolidayDates(holidayDates || doctor.holidayDates || []),
+    generatedSlotsPerDay: pieces,
+  };
+}
+
+async function deactivatePastUnbookedSlotsForDoctor(doctorId, today = getTodayDateString()) {
+  return Slot.updateMany(
+    {
+      doctorId,
+      date: { $lt: today },
+      isBooked: false,
+      isActive: true,
+    },
+    {
+      $set: { isActive: false },
+    }
+  );
+}
+
+async function deactivatePastUnbookedSlotsForAll(today = getTodayDateString()) {
+  return Slot.updateMany(
+    {
+      date: { $lt: today },
+      isBooked: false,
+      isActive: true,
+    },
+    {
+      $set: { isActive: false },
+    }
+  );
+}
+
+// Create doctor + doctor login account + rolling slot generation
 async function create(req, res) {
   try {
     const {
@@ -115,6 +374,8 @@ async function create(req, res) {
       clinic,
       fee,
       isActive,
+      workingDays,
+      holidayDates,
 
       // schedule
       startTime,
@@ -127,6 +388,7 @@ async function create(req, res) {
       generateSlots,
       regenerate,
       durationMin,
+      slotWindowDays,
     } = req.body;
 
     const doctorName = (name || fullName || "").trim();
@@ -151,6 +413,9 @@ async function create(req, res) {
     }
 
     assertObjectId(centerId, "centerId");
+
+    const normalizedWorkingDays = normalizeWorkingDays(workingDays);
+    const normalizedHolidayDates = normalizeHolidayDates(holidayDates);
 
     const existingUser = await User.findOne({ email: String(email).trim() }).lean();
     if (existingUser) {
@@ -181,11 +446,12 @@ async function create(req, res) {
         sessionTime !== undefined && sessionTime !== null && sessionTime !== ""
           ? Number(sessionTime)
           : undefined,
+      workingDays: normalizedWorkingDays,
+      holidayDates: normalizedHolidayDates,
       isActive: isActive ?? true,
     });
 
-    const normalizedDates = normalizeDates(date, dates);
-
+    const wantsSlots = generateSlots !== false;
     const slotLen =
       sessionTime !== undefined && sessionTime !== null && sessionTime !== ""
         ? Number(sessionTime)
@@ -193,17 +459,7 @@ async function create(req, res) {
         ? Number(durationMin)
         : null;
 
-    const wantsSlots = generateSlots !== false;
-
-    if (
-      !wantsSlots ||
-      normalizedDates.length === 0 ||
-      !startTime ||
-      !endTime ||
-      !slotLen ||
-      !Number.isInteger(slotLen) ||
-      slotLen <= 0
-    ) {
+    if (!wantsSlots) {
       return res.status(201).json({
         message: "Doctor account and profile created successfully",
         user: {
@@ -217,88 +473,28 @@ async function create(req, res) {
         doctor,
         slots: {
           created: false,
-          reason: "Missing or invalid slot generation inputs",
-          received: {
-            generateSlots: wantsSlots,
-            dates: normalizedDates,
-            startTime,
-            endTime,
-            sessionTime: slotLen,
-          },
+          reason: "Slot generation disabled",
         },
       });
     }
 
-    const pieces = buildSlots({
-      startTime: String(startTime).trim(),
-      endTime: String(endTime).trim(),
-      durationMin: slotLen,
+    const normalizedDates = normalizeDates(
+      date,
+      dates,
+      Number(slotWindowDays) > 0 ? Number(slotWindowDays) : DEFAULT_SLOT_WINDOW_DAYS
+    );
+
+    const slotResult = await createSlotsForDoctor({
+      doctor,
+      centerId,
+      startTime,
+      endTime,
+      sessionTime: slotLen,
+      dates: normalizedDates,
+      workingDays: normalizedWorkingDays,
+      holidayDates: normalizedHolidayDates,
+      regenerate: !!regenerate,
     });
-
-    if (!pieces.length) {
-      return res.status(201).json({
-        message: "Doctor account and profile created successfully",
-        user: {
-          id: user._id,
-          fullName: user.fullName,
-          email: user.email,
-          role: user.role,
-          mustChangePassword: user.mustChangePassword,
-          isActive: user.isActive,
-        },
-        doctor,
-        slots: {
-          created: false,
-          reason: "No valid slot range generated",
-          received: {
-            dates: normalizedDates,
-            startTime,
-            endTime,
-            sessionTime: slotLen,
-          },
-        },
-      });
-    }
-
-    if (regenerate) {
-      await Slot.deleteMany({
-        centerId,
-        doctorId: doctor._id,
-        date: { $in: normalizedDates },
-        isBooked: false,
-      });
-    }
-
-    const slotDocs = [];
-    for (const d of normalizedDates) {
-      for (const p of pieces) {
-        slotDocs.push({
-          centerId,
-          doctorId: doctor._id,
-          date: d,
-          startTime: p.startTime,
-          endTime: p.endTime,
-          isBooked: false,
-          isActive: true,
-        });
-      }
-    }
-
-    let inserted = 0;
-
-    try {
-      const result = await Slot.insertMany(slotDocs, { ordered: false });
-      inserted = Array.isArray(result) ? result.length : 0;
-    } catch (err) {
-      if (err && err.writeErrors) {
-        inserted =
-          Array.isArray(err.insertedDocs)
-            ? err.insertedDocs.length
-            : err.result?.nInserted || err.result?.result?.nInserted || 0;
-      } else {
-        throw err;
-      }
-    }
 
     return res.status(201).json({
       message: "Doctor account, profile, and slots created successfully",
@@ -311,16 +507,7 @@ async function create(req, res) {
         isActive: user.isActive,
       },
       doctor,
-      slots: {
-        created: true,
-        requested: slotDocs.length,
-        inserted,
-        dates: normalizedDates,
-        startTime: String(startTime).trim(),
-        endTime: String(endTime).trim(),
-        sessionTime: slotLen,
-        generatedSlotsPerDay: pieces,
-      },
+      slots: slotResult,
     });
   } catch (err) {
     return res.status(err.status || 500).json({ message: err.message });
@@ -420,6 +607,14 @@ async function update(req, res) {
       startTime,
       endTime,
       sessionTime,
+      workingDays,
+      holidayDates,
+      generateSlots,
+      regenerate,
+      date,
+      dates,
+      durationMin,
+      slotWindowDays,
     } = req.body;
 
     if (centerId !== undefined) {
@@ -437,6 +632,8 @@ async function update(req, res) {
       startTime,
       endTime,
       sessionTime,
+      workingDays: workingDays !== undefined ? normalizeWorkingDays(workingDays) : undefined,
+      holidayDates: holidayDates !== undefined ? normalizeHolidayDates(holidayDates) : undefined,
     });
 
     const updated = await Doctor.findByIdAndUpdate(
@@ -464,9 +661,41 @@ async function update(req, res) {
       );
     }
 
+    let slotResult = null;
+
+    if (generateSlots === true) {
+      const normalizedDates = normalizeDates(
+        date,
+        dates,
+        Number(slotWindowDays) > 0 ? Number(slotWindowDays) : DEFAULT_SLOT_WINDOW_DAYS
+      );
+
+      const slotLen =
+        sessionTime !== undefined && sessionTime !== null && sessionTime !== ""
+          ? Number(sessionTime)
+          : updated.sessionTime !== undefined && updated.sessionTime !== null
+          ? Number(updated.sessionTime)
+          : durationMin !== undefined && durationMin !== null && durationMin !== ""
+          ? Number(durationMin)
+          : null;
+
+      slotResult = await createSlotsForDoctor({
+        doctor: updated,
+        centerId: updated.centerId,
+        startTime: startTime ?? updated.startTime,
+        endTime: endTime ?? updated.endTime,
+        sessionTime: slotLen,
+        dates: normalizedDates,
+        workingDays: updated.workingDays,
+        holidayDates: updated.holidayDates,
+        regenerate: !!regenerate,
+      });
+    }
+
     return res.json({
       message: "Doctor updated successfully",
       doctor: updated,
+      ...(slotResult ? { slots: slotResult } : {}),
     });
   } catch (err) {
     return res.status(err.status || 500).json({ message: err.message });
@@ -522,6 +751,8 @@ async function updateProfile(req, res) {
       startTime,
       endTime,
       sessionTime,
+      workingDays,
+      holidayDates,
     } = req.body;
 
     const updatedDoctor = await Doctor.findOneAndUpdate(
@@ -536,6 +767,8 @@ async function updateProfile(req, res) {
           startTime,
           endTime,
           sessionTime,
+          workingDays: workingDays !== undefined ? normalizeWorkingDays(workingDays) : undefined,
+          holidayDates: holidayDates !== undefined ? normalizeHolidayDates(holidayDates) : undefined,
         }),
       },
       { new: true, runValidators: true }
@@ -574,6 +807,8 @@ async function updateProfile(req, res) {
         startTime: updatedDoctor.startTime,
         endTime: updatedDoctor.endTime,
         sessionTime: updatedDoctor.sessionTime,
+        workingDays: updatedDoctor.workingDays || [],
+        holidayDates: updatedDoctor.holidayDates || [],
         isActive: updatedDoctor.isActive,
       },
     });
@@ -612,6 +847,8 @@ async function getMe(req, res) {
         startTime: doctor.startTime,
         endTime: doctor.endTime,
         sessionTime: doctor.sessionTime,
+        workingDays: doctor.workingDays || [],
+        holidayDates: doctor.holidayDates || [],
         isActive: doctor.isActive,
         centerId: doctor.centerId || null,
       },
@@ -621,4 +858,106 @@ async function getMe(req, res) {
   }
 }
 
-module.exports = { create, getById, list, update, setActive, updateProfile, getMe };
+/**
+ * Manual endpoint: generate upcoming slots
+ * Can be called later from cron job too
+ */
+async function generateUpcomingSlots(req, res) {
+  try {
+    const {
+      doctorId,
+      days = DEFAULT_SLOT_WINDOW_DAYS,
+      regenerate = false,
+    } = req.body || {};
+
+    const filter = { isActive: true };
+    if (doctorId) {
+      assertObjectId(doctorId, "doctorId");
+      filter._id = doctorId;
+    }
+
+    const doctors = await Doctor.find(filter).lean();
+
+    let doctorsProcessed = 0;
+    let totalRequested = 0;
+    let totalInserted = 0;
+    const details = [];
+
+    for (const doctor of doctors) {
+      if (!doctor.centerId || !doctor.startTime || !doctor.endTime || !doctor.sessionTime) {
+        details.push({
+          doctorId: doctor._id,
+          name: doctor.name,
+          created: false,
+          reason: "Doctor schedule is incomplete",
+        });
+        continue;
+      }
+
+      const rollingDates = getRollingDates(Number(days) || DEFAULT_SLOT_WINDOW_DAYS);
+
+      const result = await createSlotsForDoctor({
+        doctor,
+        centerId: doctor.centerId,
+        startTime: doctor.startTime,
+        endTime: doctor.endTime,
+        sessionTime: doctor.sessionTime,
+        dates: rollingDates,
+        workingDays: doctor.workingDays,
+        holidayDates: doctor.holidayDates,
+        regenerate: !!regenerate,
+      });
+
+      await deactivatePastUnbookedSlotsForDoctor(doctor._id);
+
+      doctorsProcessed += 1;
+      totalRequested += result.requested || 0;
+      totalInserted += result.inserted || 0;
+
+      details.push({
+        doctorId: doctor._id,
+        name: doctor.name,
+        ...result,
+      });
+    }
+
+    return res.json({
+      message: "Upcoming slot generation completed successfully",
+      doctorsProcessed,
+      totalRequested,
+      totalInserted,
+      details,
+    });
+  } catch (err) {
+    return res.status(err.status || 500).json({ message: err.message });
+  }
+}
+
+/**
+ * Manual endpoint: deactivate expired unbooked slots
+ */
+async function cleanupExpiredSlots(req, res) {
+  try {
+    const result = await deactivatePastUnbookedSlotsForAll();
+
+    return res.json({
+      message: "Expired unbooked slots deactivated successfully",
+      matchedCount: result.matchedCount ?? result.n ?? 0,
+      modifiedCount: result.modifiedCount ?? result.nModified ?? 0,
+    });
+  } catch (err) {
+    return res.status(err.status || 500).json({ message: err.message });
+  }
+}
+
+module.exports = {
+  create,
+  getById,
+  list,
+  update,
+  setActive,
+  updateProfile,
+  getMe,
+  generateUpcomingSlots,
+  cleanupExpiredSlots,
+};
