@@ -15,10 +15,10 @@ router.post("/", createOrder);
 router.get("/", getOrders);
 router.get("/:id", getOrderById);
 
-// update patient/prescription/status only (NO stock change)
+
 router.put("/:id", updateOrder);
 
-// update items qty (RESTORE + RE-DEDUCT stock)
+
 router.put("/:id/items", updateOrderItems);
 
 module.exports = router;

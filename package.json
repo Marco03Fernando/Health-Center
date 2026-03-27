@@ -1,0 +1,25 @@
+{
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "mongodb": "^7.1.0",
+    "mongoose": "^9.2.2"
+  },
+  "name": "health-center",
+  "version": "1.0.0",
+  "description": "This is a project for 3YS1 Application Frameworks module code IT3040. Web application for a rural health center booking management",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Marco03Fernando/Health-Center.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Marco03Fernando/Health-Center/issues"
+  },
+  "homepage": "https://github.com/Marco03Fernando/Health-Center#readme"
+}

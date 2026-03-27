@@ -12,6 +12,8 @@ const appointmentRoutes = require("./routes/doctorChanneling/appointment.routes"
 const diagnosticTestRoutes = require("./routes/diagnosticTest.routes");
 const appointmentSlotRoutes = require("./routes/appointmentSlotRoutes");
 const bookingRoutes = require("./routes/appointmentRoutes");
+const medicationInventoryRoutes = require("./routes/pharmacy/medicationInventoryRoutes");
+const pharmacyOrderRoutes = require("./routes/pharmacy/pharmacyOrderRoutes");
 
 // Set up Express app
 const app = express();
@@ -55,6 +57,8 @@ app.use("/api/doctors", doctorRoutes);
 app.use("/api/slots", slotRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/diagnostic-tests", diagnosticTestRoutes);
+app.use("/api/medication-inventory", medicationInventoryRoutes);
+app.use("/api/pharmacy-orders", pharmacyOrderRoutes);
 
 // Appointment slot and booking routes (these already have /api/ prefix in their definitions)
 app.use(appointmentSlotRoutes);
