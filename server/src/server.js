@@ -34,6 +34,8 @@ const prescriptionRoutes = require("./routes/doctorChanneling/prescription.route
 const adminDoctorRoutes = require("./routes/doctorChanneling/admin/adminDoctor.routes");
 const adminAuthRoutes = require("./routes/auth/adminAuth.routes");
 const userAuthRoutes = require("./routes/auth/userAuth.routes");
+const medicationInventoryRoutes = require("./routes/pharmacy/medicationInventoryRoutes");
+const pharmacyOrderRoutes = require("./routes/pharmacy/pharmacyOrderRoutes");
 
 // models needed for auto slot maintenance
 const Doctor = require("./models/doctorChanneling/doctor.model");
@@ -395,6 +397,8 @@ app.use("/api/prescriptions", prescriptionRoutes);
 app.use("/api/admin/doctors", adminDoctorRoutes);
 app.use("/api/admin/auth", adminAuthRoutes);
 app.use("/api/auth", userAuthRoutes);
+app.use("/api/medication-inventory", medicationInventoryRoutes);
+app.use("/api/pharmacy-orders", pharmacyOrderRoutes);
 
 // Error handler
 app.use(errorMiddleware);
