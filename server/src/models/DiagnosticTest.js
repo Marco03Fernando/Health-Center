@@ -30,6 +30,6 @@ const DiagnosticTestSchema = new mongoose.Schema(
   }
 );
 
-const DiagnosticTest = mongoose.model('DiagnosticTest', DiagnosticTestSchema);
+const DiagnosticTest = mongoose.model('testType', DiagnosticTestSchema);
 
 module.exports = DiagnosticTest;

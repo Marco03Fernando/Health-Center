@@ -50,7 +50,7 @@ async function create(req, res, next) {
         userId,
         slotId,
         note: note || "",
-        status: "pending",
+        status: "CONFIRMED",
         statusUpdatedAt: new Date(),
         statusUpdatedBy: "patient",
         payment: {
@@ -111,13 +111,13 @@ async function cancel(req, res, next) {
       const appt = await Appointment.findOne({ _id: req.params.id, userId }).session(session);
       if (!appt) throw new ApiError(404, "Appointment not found");
 
-      if (["completed", "no_show"].includes(appt.status)) {
+      if (["completed", "no_show"].includes((appt.status || '').toLowerCase())) {
         throw new ApiError(400, "Cannot cancel a completed/no-show appointment");
       }
 
       // already cancelled -> return same
-      if (appt.status !== "cancelled") {
-        appt.status = "cancelled";
+      if ((appt.status || '').toLowerCase() !== "cancelled") {
+        appt.status = "CANCELLED";
         appt.statusUpdatedAt = new Date();
         appt.statusUpdatedBy = "patient";
         await appt.save({ session });
@@ -140,7 +140,6 @@ async function cancel(req, res, next) {
   }
 }
 
-// Mark appointment as paid
 async function pay(req, res, next) {
   try {
     const { method } = req.body;
@@ -159,7 +158,7 @@ async function pay(req, res, next) {
     appt.payment.paidAt = new Date();
     appt.payment.paidBy = "receptionist";
 
-    if (appt.status === "pending") appt.status = "confirmed";
+    if ((appt.status || '').toLowerCase() === "pending") appt.status = "CONFIRMED";
 
     appt.statusUpdatedAt = new Date();
     appt.statusUpdatedBy = "receptionist";
