@@ -17,6 +17,8 @@ import {
   Mail,
   Phone,
   Building2,
+  CalendarClock,
+  Ban,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { toast } from "sonner";
@@ -39,6 +41,8 @@ type DoctorData = {
   sessionTime?: number;
   isActive?: boolean;
   centerId?: string | { _id?: string; id?: string } | null;
+  workingDays?: string[];
+  holidayDates?: string[];
 };
 
 type AppointmentItem = {
@@ -80,6 +84,16 @@ type SlotItem = {
   available?: boolean;
 };
 
+const DAY_LABELS: Record<string, string> = {
+  mon: "Mon",
+  tue: "Tue",
+  wed: "Wed",
+  thu: "Thu",
+  fri: "Fri",
+  sat: "Sat",
+  sun: "Sun",
+};
+
 function getArrayFromResponse(data: any): any[] {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.items)) return data.items;
@@ -100,7 +114,11 @@ function getDoctorFromResponse(data: any): DoctorData | null {
 }
 
 function getTodayDate() {
-  return new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function getDoctorId(doc: DoctorData | null) {
@@ -115,11 +133,27 @@ function getAppointmentUserId(item: AppointmentItem) {
 }
 
 function formatToday(dateStr: string) {
-  const d = new Date(dateStr);
+  const d = new Date(`${dateStr}T00:00:00`);
   if (Number.isNaN(d.getTime())) return dateStr;
   return d.toLocaleDateString(undefined, {
     year: "numeric",
     month: "long",
+    day: "numeric",
+  });
+}
+
+function getDayKeyFromDateString(dateStr: string) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const day = d.getDay();
+  const map = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  return map[day];
+}
+
+function formatDateLabel(dateStr: string) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString(undefined, {
+    month: "short",
     day: "numeric",
   });
 }
@@ -176,9 +210,7 @@ export default function Dashboard() {
           ? (getArrayFromResponse(prescriptionsRes) as PrescriptionItem[])
           : [];
 
-        const slots = slotsRes
-          ? (getArrayFromResponse(slotsRes) as SlotItem[])
-          : [];
+        const slots = slotsRes ? (getArrayFromResponse(slotsRes) as SlotItem[]) : [];
 
         const uniquePatients = new Set(
           appointments.map((a) => getAppointmentUserId(a)).filter(Boolean)
@@ -280,14 +312,16 @@ export default function Dashboard() {
     [stats]
   );
 
-  const profileRows = [
-    ["Name", doctor?.fullName || doctor?.name || "-"],
-    ["Email", doctor?.email || "-"],
-    ["Phone", doctor?.phone || "-"],
-    ["Specialization", doctor?.specialization || "-"],
-    ["Clinic", doctor?.clinic || "-"],
-    ["Fee", `Rs. ${Number(doctor?.fee || 0).toLocaleString()}`],
-  ];
+  const workingDays = useMemo(() => doctor?.workingDays || [], [doctor]);
+  const holidayDates = useMemo(() => doctor?.holidayDates || [], [doctor]);
+  const todayDayKey = useMemo(() => getDayKeyFromDateString(today), [today]);
+
+  const isWorkingDayToday = useMemo(() => {
+    if (!workingDays.length) return true;
+    return workingDays.includes(todayDayKey);
+  }, [workingDays, todayDayKey]);
+
+  const isHolidayToday = useMemo(() => holidayDates.includes(today), [holidayDates, today]);
 
   if (loading) {
     return (
@@ -330,7 +364,7 @@ export default function Dashboard() {
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">
                 Here’s your daily overview including patients, prescriptions,
-                schedule activity, and consultation details.
+                slot activity, working days, and holiday configuration.
               </p>
             </div>
           </div>
@@ -403,7 +437,7 @@ export default function Dashboard() {
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Profile Summary</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Quick view of your current profile information.
+              Quick view of your current profile and schedule information.
             </p>
           </CardHeader>
 
@@ -503,7 +537,7 @@ export default function Dashboard() {
               </div>
 
               <div className="flex items-center justify-between rounded-2xl border bg-muted/20 px-4 py-3">
-                <span className="text-sm text-muted-foreground">Today's Appointments</span>
+                <span className="text-sm text-muted-foreground">Today&apos;s Appointments</span>
                 <span className="text-sm font-semibold">{stats.todayAppointments}</span>
               </div>
 
@@ -530,6 +564,85 @@ export default function Dashboard() {
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <CalendarDays className="h-5 w-5 text-primary" />
+                Availability Summary
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Working-day and holiday settings used for slot generation.
+              </p>
+            </CardHeader>
+
+            <CardContent className="space-y-4 pt-3">
+              <div>
+                <p className="mb-2 text-sm text-muted-foreground">Working Days</p>
+                <div className="flex flex-wrap gap-2">
+                  {workingDays.length ? (
+                    workingDays.map((day) => (
+                      <Badge key={day} variant="outline" className="rounded-full px-3 py-1">
+                        {DAY_LABELS[day] || day}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-sm font-semibold">-</span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm text-muted-foreground">Holiday Dates</p>
+                <div className="flex flex-wrap gap-2">
+                  {holidayDates.length ? (
+                    holidayDates.slice(0, 5).map((date) => (
+                      <Badge key={date} variant="outline" className="rounded-full px-3 py-1">
+                        {formatDateLabel(date)}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-sm font-semibold">No holidays set</span>
+                  )}
+                  {holidayDates.length > 5 ? (
+                    <Badge variant="outline" className="rounded-full px-3 py-1">
+                      +{holidayDates.length - 5} more
+                    </Badge>
+                  ) : null}
+                </div>
+              </div>
+
+              {isHolidayToday ? (
+                <div className="flex items-center justify-between rounded-2xl border bg-amber-500/10 px-4 py-3">
+                  <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+                    <Ban className="h-4 w-4" />
+                    Today is a holiday
+                  </div>
+                  <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                    Off
+                  </span>
+                </div>
+              ) : !isWorkingDayToday ? (
+                <div className="flex items-center justify-between rounded-2xl border bg-primary/10 px-4 py-3">
+                  <div className="flex items-center gap-2 text-sm text-primary">
+                    <CalendarClock className="h-4 w-4" />
+                    Outside working days
+                  </div>
+                  <span className="text-sm font-semibold text-primary">Off</span>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between rounded-2xl border bg-green-500/10 px-4 py-3">
+                  <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Working day active
+                  </div>
+                  <span className="text-sm font-semibold text-green-700 dark:text-green-400">
+                    On
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-3xl border shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Calendar className="h-5 w-5 text-primary" />
                 Status Summary
               </CardTitle>
               <p className="text-sm text-muted-foreground">

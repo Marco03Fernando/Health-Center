@@ -28,6 +28,9 @@ import {
   Loader2,
   Settings,
   CheckCircle2,
+  CalendarDays,
+  Plus,
+  X,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
@@ -44,7 +47,19 @@ type ScheduleForm = {
   startTime: string;
   endTime: string;
   sessionTime: string;
+  workingDays: string[];
+  holidayDates: string[];
 };
+
+const DAY_OPTIONS = [
+  { value: "mon", label: "Mon" },
+  { value: "tue", label: "Tue" },
+  { value: "wed", label: "Wed" },
+  { value: "thu", label: "Thu" },
+  { value: "fri", label: "Fri" },
+  { value: "sat", label: "Sat" },
+  { value: "sun", label: "Sun" },
+];
 
 const initialForm: ProfileForm = {
   fullName: "",
@@ -59,7 +74,13 @@ const initialSchedule: ScheduleForm = {
   startTime: "",
   endTime: "",
   sessionTime: "",
+  workingDays: [],
+  holidayDates: [],
 };
+
+function normalizeHolidayDateList(values: string[]) {
+  return [...new Set(values.map((item) => item.trim()).filter(Boolean))];
+}
 
 export default function Profile() {
   const [loading, setLoading] = useState(true);
@@ -71,6 +92,10 @@ export default function Profile() {
   const [initialLoadedForm, setInitialLoadedForm] = useState<ProfileForm>(initialForm);
 
   const [schedule, setSchedule] = useState<ScheduleForm>(initialSchedule);
+  const [initialLoadedSchedule, setInitialLoadedSchedule] =
+    useState<ScheduleForm>(initialSchedule);
+
+  const [holidayInput, setHolidayInput] = useState("");
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -85,7 +110,7 @@ export default function Profile() {
         const doc = data.doctor;
 
         const loadedForm = {
-          fullName: doc.fullName || "",
+          fullName: doc.fullName || doc.name || "",
           email: doc.email || "",
           phone: doc.phone || "",
           specialization: doc.specialization || "",
@@ -93,14 +118,19 @@ export default function Profile() {
           fee: doc.fee?.toString() || "",
         };
 
-        setForm(loadedForm);
-        setInitialLoadedForm(loadedForm);
-
-        setSchedule({
+        const loadedSchedule = {
           startTime: doc.startTime || "",
           endTime: doc.endTime || "",
           sessionTime: doc.sessionTime?.toString() || "",
-        });
+          workingDays: Array.isArray(doc.workingDays) ? doc.workingDays : [],
+          holidayDates: Array.isArray(doc.holidayDates) ? doc.holidayDates : [],
+        };
+
+        setForm(loadedForm);
+        setInitialLoadedForm(loadedForm);
+
+        setSchedule(loadedSchedule);
+        setInitialLoadedSchedule(loadedSchedule);
       } catch (err: any) {
         toast.error(err.message || "Failed to load profile");
       } finally {
@@ -115,9 +145,45 @@ export default function Profile() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleScheduleChange = (field: keyof Omit<ScheduleForm, "workingDays" | "holidayDates">, value: string) => {
+    setSchedule((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const toggleWorkingDay = (day: string) => {
+    setSchedule((prev) => {
+      const exists = prev.workingDays.includes(day);
+      return {
+        ...prev,
+        workingDays: exists
+          ? prev.workingDays.filter((d) => d !== day)
+          : [...prev.workingDays, day],
+      };
+    });
+  };
+
+  const addHolidayDate = () => {
+    if (!holidayInput.trim()) return;
+
+    setSchedule((prev) => ({
+      ...prev,
+      holidayDates: normalizeHolidayDateList([...prev.holidayDates, holidayInput]),
+    }));
+    setHolidayInput("");
+  };
+
+  const removeHolidayDate = (date: string) => {
+    setSchedule((prev) => ({
+      ...prev,
+      holidayDates: prev.holidayDates.filter((d) => d !== date),
+    }));
+  };
+
   const hasChanges = useMemo(() => {
-    return JSON.stringify(form) !== JSON.stringify(initialLoadedForm);
-  }, [form, initialLoadedForm]);
+    return (
+      JSON.stringify(form) !== JSON.stringify(initialLoadedForm) ||
+      JSON.stringify(schedule) !== JSON.stringify(initialLoadedSchedule)
+    );
+  }, [form, initialLoadedForm, schedule, initialLoadedSchedule]);
 
   const initials = useMemo(() => {
     if (!form.fullName.trim()) return "DR";
@@ -130,23 +196,44 @@ export default function Profile() {
   }, [form.fullName]);
 
   const handleSave = async () => {
+    if (!schedule.workingDays.length) {
+      toast.error("Select at least one working day");
+      return;
+    }
+
     try {
       setSaving(true);
+
+      const cleanedHolidayDates = normalizeHolidayDateList(schedule.holidayDates);
 
       await apiFetch("/doctors/me", {
         method: "PATCH",
         body: JSON.stringify({
           fullName: form.fullName,
+          name: form.fullName,
           email: form.email,
           phone: form.phone,
           specialization: form.specialization,
           clinic: form.clinic,
-          fee: Number(form.fee),
+          fee: Number(form.fee || 0),
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          sessionTime: Number(schedule.sessionTime || 0),
+          workingDays: schedule.workingDays,
+          holidayDates: cleanedHolidayDates,
         }),
       });
 
+      const nextSchedule = {
+        ...schedule,
+        holidayDates: cleanedHolidayDates,
+      };
+
+      setSchedule(nextSchedule);
       setInitialLoadedForm(form);
-      toast.success("Profile updated successfully");
+      setInitialLoadedSchedule(nextSchedule);
+
+      toast.success("Profile and schedule updated successfully");
     } catch (err: any) {
       toast.error(err.message || "Update failed");
     } finally {
@@ -218,8 +305,8 @@ export default function Profile() {
             <div>
               <h1 className="text-3xl font-bold tracking-tight">My Profile</h1>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">
-                Manage your doctor account details, review your assigned schedule,
-                and keep your profile information up to date.
+                Manage your doctor account details, working hours, working days,
+                and holiday dates used for slot generation.
               </p>
             </div>
           </div>
@@ -276,7 +363,7 @@ export default function Profile() {
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Personal Information</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Update your doctor profile details used across the system.
+              Update your doctor profile and schedule settings used across the system.
             </p>
           </CardHeader>
 
@@ -302,14 +389,122 @@ export default function Profile() {
               })}
             </div>
 
+            <div className="space-y-5 rounded-2xl border bg-muted/20 p-4">
+              <div>
+                <p className="text-sm font-medium">Schedule Configuration</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  These settings control your working pattern and future slot generation.
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Start Time</Label>
+                  <Input
+                    type="time"
+                    value={schedule.startTime}
+                    onChange={(e) => handleScheduleChange("startTime", e.target.value)}
+                    className="h-11 rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>End Time</Label>
+                  <Input
+                    type="time"
+                    value={schedule.endTime}
+                    onChange={(e) => handleScheduleChange("endTime", e.target.value)}
+                    className="h-11 rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Session Time (min)</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={schedule.sessionTime}
+                    onChange={(e) => handleScheduleChange("sessionTime", e.target.value)}
+                    className="h-11 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label>Working Days</Label>
+                <div className="flex flex-wrap gap-2">
+                  {DAY_OPTIONS.map((day) => {
+                    const selected = schedule.workingDays.includes(day.value);
+
+                    return (
+                      <Button
+                        key={day.value}
+                        type="button"
+                        variant={selected ? "default" : "outline"}
+                        className="h-10 rounded-full px-4"
+                        onClick={() => toggleWorkingDay(day.value)}
+                      >
+                        {day.label}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label>Holiday Dates</Label>
+
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Input
+                    type="date"
+                    value={holidayInput}
+                    onChange={(e) => setHolidayInput(e.target.value)}
+                    className="h-11 rounded-xl"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 rounded-xl"
+                    onClick={addHolidayDate}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Holiday
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {schedule.holidayDates.length ? (
+                    schedule.holidayDates.map((date) => (
+                      <Badge
+                        key={date}
+                        variant="outline"
+                        className="flex items-center gap-2 rounded-full px-3 py-1"
+                      >
+                        {date}
+                        <button
+                          type="button"
+                          onClick={() => removeHolidayDate(date)}
+                          className="rounded-full"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-sm text-muted-foreground">No holiday dates added</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="rounded-2xl border bg-muted/20 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-medium">Profile status</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {hasChanges
-                      ? "You have unsaved changes in your profile."
-                      : "Your profile information is up to date."}
+                      ? "You have unsaved changes in your profile or schedule."
+                      : "Your profile and schedule are up to date."}
                   </p>
                 </div>
 
@@ -348,7 +543,7 @@ export default function Profile() {
                   </Button>
                 </DialogTrigger>
 
-                <DialogContent className="max-w-lg rounded-3xl p-0 overflow-hidden">
+                <DialogContent className="max-w-lg overflow-hidden rounded-3xl p-0">
                   <DialogHeader className="border-b bg-background px-6 py-5">
                     <DialogTitle className="text-xl">Change Password</DialogTitle>
                     <DialogDescription>
@@ -431,7 +626,7 @@ export default function Profile() {
                 Working Hours
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Your assigned working hours are managed by the system.
+                These values are used by the backend schedule logic.
               </p>
             </CardHeader>
 
@@ -458,6 +653,54 @@ export default function Profile() {
           <Card className="rounded-3xl border shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
+                <CalendarDays className="h-5 w-5 text-primary" />
+                Availability Rules
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Working days and holidays that affect slot creation.
+              </p>
+            </CardHeader>
+
+            <CardContent className="space-y-4 pt-3">
+              <div>
+                <p className="mb-2 text-sm text-muted-foreground">Working Days</p>
+                <div className="flex flex-wrap gap-2">
+                  {schedule.workingDays.length ? (
+                    schedule.workingDays.map((day) => {
+                      const label =
+                        DAY_OPTIONS.find((item) => item.value === day)?.label || day;
+                      return (
+                        <Badge key={day} variant="outline" className="rounded-full px-3 py-1">
+                          {label}
+                        </Badge>
+                      );
+                    })
+                  ) : (
+                    <span className="text-sm text-muted-foreground">No working days selected</span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm text-muted-foreground">Holiday Dates</p>
+                <div className="flex flex-wrap gap-2">
+                  {schedule.holidayDates.length ? (
+                    schedule.holidayDates.map((date) => (
+                      <Badge key={date} variant="outline" className="rounded-full px-3 py-1">
+                        {date}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-sm text-muted-foreground">No holiday dates added</span>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-3xl border shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
                 <ShieldCheck className="h-5 w-5 text-primary" />
                 Account Security
               </CardTitle>
@@ -477,7 +720,7 @@ export default function Profile() {
               <div className="rounded-2xl border bg-muted/20 p-4">
                 <p className="text-sm font-medium">Profile accuracy</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Keep your contact details, clinic name, and specialization up to date.
+                  Keep your contact details, clinic name, specialization, and availability settings up to date.
                 </p>
               </div>
             </CardContent>

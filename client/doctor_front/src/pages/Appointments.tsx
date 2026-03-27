@@ -10,6 +10,8 @@ import {
   CheckCircle2,
   Lock,
   CircleOff,
+  CalendarClock,
+  Ban,
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/api";
@@ -30,6 +32,8 @@ type DoctorData = {
   sessionTime?: number;
   isActive?: boolean;
   centerId?: string | null;
+  workingDays?: string[];
+  holidayDates?: string[];
 };
 
 type SlotData = {
@@ -41,8 +45,22 @@ type SlotData = {
   isActive?: boolean;
 };
 
+const DAY_LABELS: Record<string, string> = {
+  mon: "Mon",
+  tue: "Tue",
+  wed: "Wed",
+  thu: "Thu",
+  fri: "Fri",
+  sat: "Sat",
+  sun: "Sun",
+};
+
 function getTodayDate() {
-  return new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function getArrayFromResponse(data: any): any[] {
@@ -54,7 +72,7 @@ function getArrayFromResponse(data: any): any[] {
 }
 
 function formatToday(dateStr: string) {
-  const d = new Date(dateStr);
+  const d = new Date(`${dateStr}T00:00:00`);
   if (Number.isNaN(d.getTime())) return dateStr;
   return d.toLocaleDateString(undefined, {
     year: "numeric",
@@ -67,6 +85,22 @@ function getSlotStatus(slot: SlotData) {
   if (slot.isActive === false) return "inactive";
   if (slot.isBooked) return "booked";
   return "available";
+}
+
+function getDayKeyFromDateString(dateStr: string) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const day = d.getDay();
+  const map = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  return map[day];
+}
+
+function formatDateLabel(dateStr: string) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export default function Appointments() {
@@ -118,6 +152,52 @@ export default function Appointments() {
     [sortedSlots]
   );
 
+  const workingDays = useMemo(() => doctor?.workingDays || [], [doctor]);
+  const holidayDates = useMemo(() => doctor?.holidayDates || [], [doctor]);
+
+  const todayDayKey = useMemo(() => getDayKeyFromDateString(today), [today]);
+
+  const isWorkingDayToday = useMemo(() => {
+    if (!workingDays.length) return true;
+    return workingDays.includes(todayDayKey);
+  }, [workingDays, todayDayKey]);
+
+  const isHolidayToday = useMemo(() => {
+    return holidayDates.includes(today);
+  }, [holidayDates, today]);
+
+  const scheduleNotice = useMemo(() => {
+    if (!doctor?.isActive) {
+      return {
+        title: "Schedule is inactive",
+        text: "Your doctor profile is currently inactive, so active slots may not be available.",
+        icon: <CircleOff className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />,
+      };
+    }
+
+    if (isHolidayToday) {
+      return {
+        title: "Today is marked as a holiday",
+        text: "This date is included in your holiday list, so no active booking schedule is expected for today.",
+        icon: <Ban className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />,
+      };
+    }
+
+    if (!isWorkingDayToday) {
+      return {
+        title: "Today is outside your working days",
+        text: "This day is not included in your configured working days, so no active booking schedule is expected for today.",
+        icon: <CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-primary" />,
+      };
+    }
+
+    return {
+      title: "Schedule is read-only",
+      text: "Your availability is based on your configured working hours, working days, and holidays.",
+      icon: <CalIcon className="mt-0.5 h-5 w-5 shrink-0 text-primary" />,
+    };
+  }, [doctor?.isActive, isHolidayToday, isWorkingDayToday]);
+
   if (loading) {
     return (
       <div className="space-y-6 p-1 md:p-2">
@@ -156,8 +236,8 @@ export default function Appointments() {
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Today&apos;s Schedule</h1>
               <p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">
-                Review your working hours and today&apos;s time slots in a clear,
-                professional schedule view.
+                Review your working hours, configured availability, and today&apos;s
+                generated time slots in one place.
               </p>
             </div>
           </div>
@@ -185,7 +265,7 @@ export default function Appointments() {
           </Card>
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-4">
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card className="rounded-2xl border shadow-none">
             <CardContent className="p-5">
               <p className="text-sm text-muted-foreground">Working Hours</p>
@@ -198,9 +278,7 @@ export default function Appointments() {
           <Card className="rounded-2xl border shadow-none">
             <CardContent className="p-5">
               <p className="text-sm text-muted-foreground">Session Time</p>
-              <p className="mt-2 text-lg font-bold">
-                {doctor.sessionTime || 0} min
-              </p>
+              <p className="mt-2 text-lg font-bold">{doctor.sessionTime || 0} min</p>
             </CardContent>
           </Card>
 
@@ -218,17 +296,55 @@ export default function Appointments() {
             </CardContent>
           </Card>
         </div>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+          <Card className="rounded-2xl border shadow-none">
+            <CardContent className="p-5">
+              <p className="text-sm text-muted-foreground">Working Days</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {workingDays.length ? (
+                  workingDays.map((day) => (
+                    <Badge key={day} variant="outline" className="rounded-full px-3 py-1">
+                      {DAY_LABELS[day] || day}
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-sm font-medium text-muted-foreground">-</span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl border shadow-none">
+            <CardContent className="p-5">
+              <p className="text-sm text-muted-foreground">Holiday Dates</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {holidayDates.length ? (
+                  holidayDates.slice(0, 6).map((date) => (
+                    <Badge key={date} variant="outline" className="rounded-full px-3 py-1">
+                      {formatDateLabel(date)}
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-sm font-medium text-muted-foreground">No holidays set</span>
+                )}
+                {holidayDates.length > 6 ? (
+                  <Badge variant="outline" className="rounded-full px-3 py-1">
+                    +{holidayDates.length - 6} more
+                  </Badge>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Card className="rounded-3xl border border-primary/20 shadow-sm">
         <CardContent className="flex items-start gap-3 p-5 text-sm">
-          <CalIcon className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+          {scheduleNotice.icon}
           <div>
-            <p className="font-medium text-foreground">Schedule is read-only</p>
-            <p className="mt-1 text-muted-foreground">
-              Your availability is managed by the system based on your configured
-              working hours. Contact administration if schedule changes are needed.
-            </p>
+            <p className="font-medium text-foreground">{scheduleNotice.title}</p>
+            <p className="mt-1 text-muted-foreground">{scheduleNotice.text}</p>
           </div>
         </CardContent>
       </Card>
@@ -269,7 +385,7 @@ export default function Appointments() {
               <CalendarDays className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
               <p className="text-sm font-medium">No slots found for today</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                There are no generated time slots available for this date.
+                This may be because today is not a working day, is a holiday, or no slots were generated yet.
               </p>
             </div>
           ) : (
@@ -293,15 +409,15 @@ export default function Appointments() {
                       ? {
                           badge: "Inactive",
                           icon: <CircleOff className="h-4 w-4 text-muted-foreground" />,
-                          cardClass:
-                            "border-muted bg-muted/30 hover:bg-muted/40",
-                          badgeClass:
-                            "border-muted bg-muted text-muted-foreground",
+                          cardClass: "border-muted bg-muted/30 hover:bg-muted/40",
+                          badgeClass: "border-muted bg-muted text-muted-foreground",
                           subText: "This slot is not active",
                         }
                       : {
                           badge: "Available",
-                          icon: <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />,
+                          icon: (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          ),
                           cardClass:
                             "border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/15",
                           badgeClass:
@@ -333,14 +449,10 @@ export default function Appointments() {
                           {statusUI.badge}
                         </Badge>
 
-                        <span className="text-[11px] text-muted-foreground">
-                          #{index + 1}
-                        </span>
+                        <span className="text-[11px] text-muted-foreground">#{index + 1}</span>
                       </div>
 
-                      <p className="mt-3 text-xs text-muted-foreground">
-                        {statusUI.subText}
-                      </p>
+                      <p className="mt-3 text-xs text-muted-foreground">{statusUI.subText}</p>
                     </div>
                   );
                 })}
