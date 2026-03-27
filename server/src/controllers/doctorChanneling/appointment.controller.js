@@ -6,133 +6,332 @@ const ApiError = require("../../utils/ApiError");
 
 async function create(req, res, next) {
   try {
-    const { centerId, doctorId, slotId, userId, note } = req.body;
+    const { centerId, doctorId, userId: bodyUserId, slotId, note } = req.body;
 
-    if (!centerId || !doctorId || !slotId || !userId) {
-      throw new ApiError(400, "centerId, doctorId, slotId, userId are required");
+    const resolvedUserId =
+      (req.user && (req.user._id || req.user.id)) ||
+      (req.session && req.session.userId) ||
+      bodyUserId;
+
+    if (!centerId) throw new ApiError(400, "centerId is required");
+    if (!doctorId) throw new ApiError(400, "doctorId is required");
+    if (!resolvedUserId) throw new ApiError(400, "userId is required");
+    if (!slotId) throw new ApiError(400, "slotId is required");
+
+    if (!mongoose.Types.ObjectId.isValid(centerId)) {
+      throw new ApiError(400, "Invalid centerId");
     }
-
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
+    if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+      throw new ApiError(400, "Invalid doctorId");
+    }
+    if (!mongoose.Types.ObjectId.isValid(resolvedUserId)) {
       throw new ApiError(400, "Invalid userId");
     }
+    if (!mongoose.Types.ObjectId.isValid(slotId)) {
+      throw new ApiError(400, "Invalid slotId");
+    }
 
-    const doctor = await Doctor.findById(doctorId);
+    const [slot, doctor] = await Promise.all([
+      Slot.findById(slotId),
+      Doctor.findById(doctorId).lean(),
+    ]);
+
+    if (!slot) throw new ApiError(404, "Slot not found");
     if (!doctor) throw new ApiError(404, "Doctor not found");
-    if (String(doctor.centerId) !== String(centerId)) {
-      throw new ApiError(400, "Doctor does not belong to this center");
+
+    if (!slot.isActive) {
+      throw new ApiError(400, "Slot is inactive");
     }
 
-    const slot = await Slot.findOneAndUpdate(
-      { _id: slotId, doctorId, centerId, isBooked: false },
-      { $set: { isBooked: true } },
-      { new: true }
-    );
-
-    if (!slot) {
-      throw new ApiError(409, "Slot not available or already booked");
+    if (slot.isBooked) {
+      throw new ApiError(409, "Slot already booked");
     }
 
-    const amount = Number(doctor.fee || 0);
+    if (String(slot.doctorId) !== String(doctorId)) {
+      throw new ApiError(400, "Slot does not belong to this doctor");
+    }
 
-    const appt = await Appointment.create({
+    if (String(slot.centerId) !== String(centerId)) {
+      throw new ApiError(400, "Slot does not belong to this center");
+    }
+
+    const existing = await Appointment.findOne({ slotId }).lean();
+    if (existing) {
+      throw new ApiError(409, "Appointment already exists for this slot");
+    }
+
+    const created = await Appointment.create({
       centerId,
       doctorId,
-      userId,
+      userId: resolvedUserId,
       slotId,
       note: note || "",
       status: "pending",
       statusUpdatedAt: new Date(),
-      statusUpdatedBy: "patient",
+      statusUpdatedBy: "system",
       payment: {
         status: "unpaid",
-        method: "cash",
-        amount,
+        amount: Number(doctor.fee || 0),
         currency: "LKR",
       },
     });
 
-    return res.status(201).json({ success: true, data: appt });
+    slot.isBooked = true;
+    await slot.save();
+
+    const populated = await Appointment.findById(created._id)
+      .populate("userId", "fullName email phone")
+      .populate("doctorId", "name specialization clinic fee phone")
+      .populate("centerId", "name district address phone")
+      .populate("slotId", "date startTime endTime")
+      .lean();
+
+    return res.status(201).json({
+      success: true,
+      data: populated,
+    });
   } catch (err) {
     next(err);
   }
 }
 
-// User appointment list
 async function listByUser(req, res, next) {
   try {
     const { userId } = req.params;
+    const { status, q, page = 1, limit = 20 } = req.query;
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       throw new ApiError(400, "Invalid userId");
     }
 
-    const items = await Appointment.find({ userId })
-      .populate("doctorId", "name specialization clinic fee")
-      .populate("centerId", "name district")
-      .populate("slotId", "date startTime endTime")
-      .sort({ createdAt: -1 });
+    const filter = { userId };
 
-    return res.json({ success: true, data: items });
+    if (status) {
+      filter.status = status;
+    }
+
+    const safePage = Math.max(1, parseInt(page, 10) || 1);
+    const safeLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+    const skip = (safePage - 1) * safeLimit;
+
+    if (q && String(q).trim()) {
+      const search = String(q).trim();
+
+      const matchedDoctorIds = await Appointment.db
+        .collection("doctors")
+        .find(
+          {
+            $or: [
+              { name: { $regex: search, $options: "i" } },
+              { specialization: { $regex: search, $options: "i" } },
+              { clinic: { $regex: search, $options: "i" } },
+            ],
+          },
+          { projection: { _id: 1 } }
+        )
+        .toArray();
+
+      const doctorIds = matchedDoctorIds.map((d) => d._id);
+
+      if (doctorIds.length) {
+        filter.$or = [{ doctorId: { $in: doctorIds } }];
+      } else {
+        filter.$or = [{ _id: null }];
+      }
+    }
+
+    const [items, total] = await Promise.all([
+      Appointment.find(filter)
+        .populate({
+          path: "doctorId",
+          select: "name specialization clinic fee phone centerId",
+          populate: {
+            path: "centerId",
+            select: "name district address phone location",
+          },
+        })
+        .populate("centerId", "name district address phone location")
+        .populate("slotId", "date startTime endTime")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(safeLimit)
+        .lean(),
+      Appointment.countDocuments(filter),
+    ]);
+
+    return res.json({
+      success: true,
+      data: items,
+      pagination: {
+        page: safePage,
+        limit: safeLimit,
+        total,
+        pages: Math.ceil(total / safeLimit),
+      },
+    });
   } catch (err) {
     next(err);
   }
 }
 
-// Cancel appointment
+async function listByDoctor(req, res, next) {
+  try {
+    const doctorId = req.doctor._id;
+    const { status, q, page = 1, limit = 20 } = req.query;
+
+    const filter = { doctorId };
+
+    if (status) {
+      filter.status = status;
+    }
+
+    const safePage = Math.max(1, parseInt(page, 10) || 1);
+    const safeLimit = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+    const skip = (safePage - 1) * safeLimit;
+
+    if (q && String(q).trim()) {
+      const search = String(q).trim();
+
+      const matchedUserIds = await Appointment.db
+        .collection("users")
+        .find(
+          {
+            $or: [
+              { fullName: { $regex: search, $options: "i" } },
+              { email: { $regex: search, $options: "i" } },
+              { phone: { $regex: search, $options: "i" } },
+            ],
+          },
+          { projection: { _id: 1 } }
+        )
+        .toArray();
+
+      const userIds = matchedUserIds.map((u) => u._id);
+
+      if (userIds.length) {
+        filter.$or = [{ userId: { $in: userIds } }];
+      } else {
+        filter.$or = [{ _id: null }];
+      }
+    }
+
+    const [items, total] = await Promise.all([
+      Appointment.find(filter)
+        .populate("userId", "fullName email phone")
+        .populate("doctorId", "name specialization clinic fee phone")
+        .populate("centerId", "name district")
+        .populate("slotId", "date startTime endTime")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(safeLimit)
+        .lean(),
+      Appointment.countDocuments(filter),
+    ]);
+
+    return res.json({
+      success: true,
+      data: items,
+      pagination: {
+        page: safePage,
+        limit: safeLimit,
+        total,
+        pages: Math.ceil(total / safeLimit),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function cancel(req, res, next) {
   try {
-    const { userId } = req.query;
-    if (!userId) {
-      return res.status(400).json({ success: false, message: "userId is required in query" });
+    const { id } = req.params;
+    const bodyUserId =
+      req.query.userId || req.body?.userId || (req.user && (req.user._id || req.user.id));
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new ApiError(400, "Invalid appointment id");
     }
 
-    const appt = await Appointment.findOne({ _id: req.params.id, userId });
-    if (!appt) throw new ApiError(404, "Appointment not found");
-
-    if (["completed", "no_show"].includes(appt.status)) {
-      throw new ApiError(400, "Cannot cancel a completed/no-show appointment");
+    const appointment = await Appointment.findById(id);
+    if (!appointment) {
+      throw new ApiError(404, "Appointment not found");
     }
 
-    appt.status = "cancelled";
-    appt.statusUpdatedAt = new Date();
-    appt.statusUpdatedBy = "patient";
-    await appt.save();
+    if (bodyUserId && String(appointment.userId) !== String(bodyUserId)) {
+      throw new ApiError(403, "You can only cancel your own appointment");
+    }
 
-    // Free slot
-    await Slot.updateOne({ _id: appt.slotId }, { $set: { isBooked: false } });
+    if (appointment.status === "cancelled") {
+      throw new ApiError(400, "Appointment already cancelled");
+    }
 
-    return res.json({ success: true, data: appt });
+    appointment.status = "cancelled";
+    appointment.statusUpdatedAt = new Date();
+    appointment.statusUpdatedBy = "patient";
+
+    await appointment.save();
+
+    if (appointment.slotId) {
+      await Slot.findByIdAndUpdate(appointment.slotId, {
+        $set: { isBooked: false },
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Appointment cancelled successfully",
+      data: appointment,
+    });
   } catch (err) {
     next(err);
   }
 }
 
-// Mark appointment as paid
-async function pay(req, res, next) {
+async function updateAppointmentStatusByDoctor(req, res, next) {
   try {
-    const { method } = req.body;
-    const appt = await Appointment.findById(req.params.id);
-    if (!appt) throw new ApiError(404, "Appointment not found");
+    const { id } = req.params;
+    const { status } = req.body;
 
-    if (appt.status === "cancelled") throw new ApiError(400, "Cannot pay for a cancelled appointment");
-    if (appt.status === "no_show") throw new ApiError(400, "Cannot pay for a no-show appointment");
-
-    if (appt.payment?.status === "paid") {
-      throw new ApiError(400, "Appointment is already paid");
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new ApiError(400, "Invalid appointment id");
     }
 
-    appt.payment.status = "paid";
-    appt.payment.method = method || appt.payment.method || "cash";
-    appt.payment.paidAt = new Date();
-    appt.payment.paidBy = "receptionist";
+    const allowedStatuses = ["completed", "no_show"];
+    if (!allowedStatuses.includes(status)) {
+      throw new ApiError(400, "Invalid status");
+    }
 
-    if (appt.status === "pending") appt.status = "confirmed";
+    const appointment = await Appointment.findById(id);
+    if (!appointment) {
+      throw new ApiError(404, "Appointment not found");
+    }
 
-    appt.statusUpdatedAt = new Date();
-    appt.statusUpdatedBy = "receptionist";
+    if (req.doctor && String(appointment.doctorId) !== String(req.doctor._id)) {
+      throw new ApiError(403, "You can only update your own appointments");
+    }
 
-    await appt.save();
-    return res.json({ success: true, data: appt });
+    if (appointment.status === "cancelled") {
+      throw new ApiError(400, "Cancelled appointment cannot be updated");
+    }
+
+    if (appointment.status === "completed" || appointment.status === "no_show") {
+      return res.json({
+        success: true,
+        data: appointment,
+      });
+    }
+
+    appointment.status = status;
+    appointment.statusUpdatedAt = new Date();
+    appointment.statusUpdatedBy = "doctor";
+
+    await appointment.save();
+
+    return res.json({
+      success: true,
+      data: appointment,
+    });
   } catch (err) {
     next(err);
   }
@@ -141,6 +340,7 @@ async function pay(req, res, next) {
 module.exports = {
   create,
   listByUser,
+  listByDoctor,
   cancel,
-  pay,
+  updateAppointmentStatusByDoctor,
 };

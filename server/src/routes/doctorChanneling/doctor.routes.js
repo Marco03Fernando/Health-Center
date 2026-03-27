@@ -1,18 +1,16 @@
 const express = require("express");
 const doctorController = require("../../controllers/doctorChanneling/doctor.controller");
+const { protectSession } = require("../../middlewares/protectSession.middleware"); // Session protection
+const { allowRoles } = require("../../middlewares/role.middleware"); // Role-based authorization
 
 const router = express.Router();
 
-// CRUD operations for doctor management
-router.post("/", doctorController.create);  // Create a new doctor
+// For the logged-in doctor
+router.get("/me", protectSession, allowRoles("doctor"), doctorController.getMe);
+router.patch("/me", protectSession, allowRoles("doctor"), doctorController.updateProfile);
 
-// List doctors with filters for channeling UI
-router.get("/", doctorController.list);    // Get a list of doctors with query parameters
-
-router.get("/:id", doctorController.getById);   // Get a specific doctor by ID
-router.patch("/:id", doctorController.update);  // Update doctor details
-
-// Activate or deactivate the doctor
-router.patch("/:id/active", doctorController.setActive);
+// Public doctor browsing
+router.get("/", doctorController.list);
+router.get("/:id", doctorController.getById);
 
 module.exports = router;
