@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 210 40% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 40% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 40% 11%;
+
+    --primary: 187 72% 38%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 25% 95%;
+    --secondary-foreground: 210 40% 11%;
+
+    --muted: 210 20% 96%;
+    --muted-foreground: 210 10% 50%;
+
+    --accent: 187 60% 94%;
+    --accent-foreground: 187 72% 25%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 20% 91%;
+    --input: 210 20% 91%;
+    --ring: 187 72% 38%;
+
+    --radius: 0.75rem;
+
+    --success: 152 60% 40%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 210 80% 52%;
+    --info-foreground: 0 0% 100%;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 210 20% 30%;
+    --sidebar-primary: 187 72% 38%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 187 60% 94%;
+    --sidebar-accent-foreground: 187 72% 25%;
+    --sidebar-border: 210 20% 93%;
+    --sidebar-ring: 187 72% 38%;
+  }
+
+  .dark {
+    --background: 210 40% 6%;
+    --foreground: 210 20% 96%;
+    --card: 210 35% 9%;
+    --card-foreground: 210 20% 96%;
+    --popover: 210 35% 9%;
+    --popover-foreground: 210 20% 96%;
+    --primary: 187 72% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 30% 15%;
+    --secondary-foreground: 210 20% 96%;
+    --muted: 210 30% 15%;
+    --muted-foreground: 210 15% 60%;
+    --accent: 187 40% 15%;
+    --accent-foreground: 187 72% 70%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 210 30% 18%;
+    --input: 210 30% 18%;
+    --ring: 187 72% 45%;
+    --sidebar-background: 210 35% 9%;
+    --sidebar-foreground: 210 20% 80%;
+    --sidebar-primary: 187 72% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 187 40% 15%;
+    --sidebar-accent-foreground: 187 72% 70%;
+    --sidebar-border: 210 30% 18%;
+    --sidebar-ring: 187 72% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+}
+
+@layer utilities {
+  .medical-gradient {
+    background: linear-gradient(135deg, hsl(187 72% 38%), hsl(187 72% 30%));
+  }
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-sm border border-border/50 shadow-sm;
+  }
+}

@@ -15,7 +15,6 @@ const slotSchema = new mongoose.Schema(
       index: true,
     },
 
-    
     date: { type: String, required: true, index: true }, // "YYYY-MM-DD"
     startTime: { type: String, required: true },         // "09:00"
     endTime: { type: String },
