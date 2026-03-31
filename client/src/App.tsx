@@ -8,6 +8,7 @@ import AdminRoutes from "@/routes/AdminRoutes";
 import CenterAdminRoutes from "@/routes/CenterAdminRoutes";
 import DoctorRoutes from "@/routes/DoctorRoutes";
 import UserRoutes from "@/routes/UserRoutes";
+import LabTechRoutes from "@/routes/LabTechRoutes";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/center-admin/*"  element={<CenterAdminRoutes />} />
           <Route path="/doctor/*"        element={<DoctorRoutes />} />
           <Route path="/user/*"          element={<UserRoutes />} />
+          <Route path="/lab-tech/*"      element={<LabTechRoutes />} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>

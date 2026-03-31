@@ -39,7 +39,8 @@ export const useCenterAdmin = () => {
 function normalizeCenterAdmin(data: any): CenterAdminUser | null {
   const u = data?.admin || data?.user || data;
   if (!u) return null;
-  // Accept any admin-like role; center-admin or admin or superadmin
+  // Reject lab-tech accounts — they belong to the lab-tech portal only
+  if (u.role === "lab-tech") return null;
   return {
     id: u.id || u._id || "",
     name: u.name || u.fullName || "",
