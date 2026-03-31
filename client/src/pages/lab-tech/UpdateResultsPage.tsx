@@ -93,7 +93,7 @@ export default function UpdateResultsPage() {
         centerId
           ? getLabBookings(centerId)
           : Promise.resolve([] as LabBooking[]),
-        getTestTypes(),
+        getTestTypes(centerId || undefined),
       ]);
       if (bookingsRes.status === "fulfilled") {
         const confirmed = bookingsRes.value.filter(

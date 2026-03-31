@@ -2,13 +2,17 @@ const DiagnosticTest = require("../../models/DiagnosticTest");
 const ApiError = require("../../utils/ApiError");
 
 /**
- * @desc    Get all diagnostic tests
- * @route   GET /api/diagnostic-tests
+ * @desc    Get all diagnostic tests (optionally filtered by centerId)
+ * @route   GET /api/lab/diagnostic-tests?centerId=xxx
  * @access  Public
  */
 exports.getAllTests = async (req, res, next) => {
   try {
-    const tests = await DiagnosticTest.find().sort({ name: 1 });
+    const filter = { isActive: true };
+    if (req.query.centerId) {
+      filter.centerId = req.query.centerId;
+    }
+    const tests = await DiagnosticTest.find(filter).sort({ name: 1 });
     res.json({
       success: true,
       count: tests.length,
@@ -21,7 +25,7 @@ exports.getAllTests = async (req, res, next) => {
 
 /**
  * @desc    Get single diagnostic test by ID
- * @route   GET /api/diagnostic-tests/:id
+ * @route   GET /api/lab/diagnostic-tests/:id
  * @access  Public
  */
 exports.getTestById = async (req, res, next) => {
@@ -43,22 +47,36 @@ exports.getTestById = async (req, res, next) => {
 
 /**
  * @desc    Create new diagnostic test
- * @route   POST /api/diagnostic-tests
- * @access  Admin
+ * @route   POST /api/lab/diagnostic-tests
+ * @access  Admin / Lab-Tech
  */
 exports.createTest = async (req, res, next) => {
   try {
-    const { name, description, instructions } = req.body;
+    const {
+      name,
+      description,
+      instructions,
+      category,
+      price,
+      sampleTypes,
+      parameters,
+      centerId,
+    } = req.body;
 
-    // Validate required fields
-    if (!name || !instructions) {
-      throw new ApiError(400, "Name and preparation instructions are required");
+    if (!name) {
+      throw new ApiError(400, "Name is required");
     }
 
+    // testCode is intentionally omitted — the model pre-save hook generates it
     const test = await DiagnosticTest.create({
       name,
       description,
       instructions,
+      category,
+      price,
+      sampleTypes,
+      parameters: parameters || [],
+      centerId: centerId || null,
     });
 
     res.status(201).json({
@@ -72,8 +90,8 @@ exports.createTest = async (req, res, next) => {
 
 /**
  * @desc    Update diagnostic test
- * @route   PUT /api/diagnostic-tests/:id
- * @access  Admin
+ * @route   PUT /api/lab/diagnostic-tests/:id
+ * @access  Admin / Lab-Tech
  */
 exports.updateTest = async (req, res, next) => {
   try {
@@ -101,8 +119,8 @@ exports.updateTest = async (req, res, next) => {
 
 /**
  * @desc    Delete diagnostic test (soft delete)
- * @route   DELETE /api/diagnostic-tests/:id
- * @access  Admin
+ * @route   DELETE /api/lab/diagnostic-tests/:id
+ * @access  Admin / Lab-Tech
  */
 exports.deleteTest = async (req, res, next) => {
   try {

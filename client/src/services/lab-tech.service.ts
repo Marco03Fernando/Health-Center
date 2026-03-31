@@ -87,8 +87,9 @@ export type TestResult = {
 
 // ─── Diagnostic Tests ─────────────────────────────────────────────────────────
 
-export async function getDiagnosticTests(): Promise<DiagnosticTest[]> {
-  const res = await apiFetch("/lab/diagnostic-tests");
+export async function getDiagnosticTests(centerId?: string): Promise<DiagnosticTest[]> {
+  const qs = centerId ? `?centerId=${encodeURIComponent(centerId)}` : "";
+  const res = await apiFetch(`/lab/diagnostic-tests${qs}`);
   return res?.data || (Array.isArray(res) ? res : []);
 }
 
@@ -97,6 +98,7 @@ export async function createDiagnosticTest(data: {
   description?: string;
   instructions: string;
   isActive?: boolean;
+  centerId?: string;
 }): Promise<DiagnosticTest> {
   const res = await apiFetch("/lab/diagnostic-tests", {
     method: "POST",
@@ -122,8 +124,9 @@ export async function deleteDiagnosticTest(id: string): Promise<void> {
 
 // ─── Test Types (for result entry parameters) ─────────────────────────────────
 
-export async function getTestTypes(): Promise<TestType[]> {
-  const res = await apiFetch("/test-types");
+export async function getTestTypes(centerId?: string): Promise<TestType[]> {
+  const qs = centerId ? `?centerId=${encodeURIComponent(centerId)}` : "";
+  const res = await apiFetch(`/test-types${qs}`);
   return Array.isArray(res) ? res : res?.data || [];
 }
 
@@ -156,8 +159,9 @@ export async function updateBookingStatus(
 
 // ─── Test Results ─────────────────────────────────────────────────────────────
 
-export async function getTestResults(): Promise<TestResult[]> {
-  const res = await apiFetch("/test-results");
+export async function getTestResults(centerId?: string): Promise<TestResult[]> {
+  const qs = centerId ? `?centerId=${encodeURIComponent(centerId)}` : "";
+  const res = await apiFetch(`/test-results${qs}`);
   return res?.data || (Array.isArray(res) ? res : []);
 }
 

@@ -15,12 +15,18 @@ export type LabTechUser = {
   role: string;
   centerId?: string;
   centerName?: string;
+  centerAddress?: string;
+  centerDistrict?: string;
+  centerOpeningTime?: string;
+  centerClosingTime?: string;
 };
 
 interface LabTechContextType {
   user: LabTechUser | null;
   centerId: string;
   centerName: string;
+  centerAddress: string;
+  centerDistrict: string;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
@@ -48,6 +54,10 @@ function normalizeUser(data: any): LabTechUser | null {
     role: u.role || "",
     centerId: u.centerId || "",
     centerName: u.centerName || "",
+    centerAddress: u.centerAddress || "",
+    centerDistrict: u.centerDistrict || "",
+    centerOpeningTime: u.centerOpeningTime || "",
+    centerClosingTime: u.centerClosingTime || "",
   };
 }
 
@@ -105,12 +115,16 @@ export function LabTechProvider({ children }: { children: ReactNode }) {
 
   const centerId = user?.centerId || "";
   const centerName = user?.centerName || "";
+  const centerAddress = user?.centerAddress || "";
+  const centerDistrict = user?.centerDistrict || "";
 
   const value = useMemo(
     () => ({
       user,
       centerId,
       centerName,
+      centerAddress,
+      centerDistrict,
       isAuthenticated: !!user,
       isLoading,
       login,

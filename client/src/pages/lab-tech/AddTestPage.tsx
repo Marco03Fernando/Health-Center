@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createDiagnosticTest } from "@/services/lab-tech.service";
+import { useLabTech } from "@/contexts/LabTechContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import {
 
 export default function AddTestPage() {
   const navigate = useNavigate();
+  const { centerId } = useLabTech();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -39,6 +41,7 @@ export default function AddTestPage() {
         description: description.trim() || undefined,
         instructions: instructions.trim(),
         isActive,
+        centerId: centerId || undefined,
       });
       setSuccess(true);
       setTimeout(() => navigate("/lab-tech/test-types"), 1500);

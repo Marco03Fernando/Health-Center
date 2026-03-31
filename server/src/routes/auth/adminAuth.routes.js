@@ -12,6 +12,6 @@ const { allowRoles } = require("../../middlewares/role.middleware");
 
 router.post("/register", registerAdmin);
 router.post("/login", loginAdmin);
-router.get("/me", protect, allowRoles("admin", "superadmin"), getAdminMe);
+router.get("/me", protect, allowRoles("admin", "superadmin", "lab-tech", "center-admin"), getAdminMe);
 
 module.exports = router;

@@ -21,6 +21,8 @@ import {
   Activity,
   ShieldCheck,
   AlertCircle,
+  MapPin,
+  Building2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -51,7 +53,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default function LabTechOverviewPage() {
-  const { user, centerId, centerName } = useLabTech();
+  const { user, centerId, centerName, centerAddress, centerDistrict } = useLabTech();
 
   const [diagnosticTests, setDiagnosticTests] = useState<DiagnosticTest[]>([]);
   const [bookings, setBookings] = useState<LabBooking[]>([]);
@@ -68,11 +70,15 @@ export default function LabTechOverviewPage() {
       setLoading(true);
       setError("");
       const [testsRes, bookingsRes, resultsRes] = await Promise.allSettled([
-        getDiagnosticTests(),
+        centerId
+          ? getDiagnosticTests(centerId)
+          : Promise.resolve([] as DiagnosticTest[]),
         centerId
           ? getLabBookings(centerId)
           : Promise.resolve([] as LabBooking[]),
-        getTestResults(),
+        centerId
+          ? getTestResults(centerId)
+          : Promise.resolve([] as TestResult[]),
       ]);
       if (testsRes.status === "fulfilled") setDiagnosticTests(testsRes.value);
       if (bookingsRes.status === "fulfilled") setBookings(bookingsRes.value);
@@ -177,6 +183,22 @@ export default function LabTechOverviewPage() {
                   ? `Here's a real-time overview of ${centerName}.`
                   : "Here's a real-time overview of your lab."}
               </p>
+              {(centerAddress || centerDistrict) && (
+                <div className="mt-2 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                  {centerAddress && (
+                    <span className="flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5" />
+                      {centerAddress}
+                    </span>
+                  )}
+                  {centerDistrict && (
+                    <span className="flex items-center gap-1">
+                      <Building2 className="h-3.5 w-3.5" />
+                      {centerDistrict}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

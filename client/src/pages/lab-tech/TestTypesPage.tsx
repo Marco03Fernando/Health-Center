@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   getDiagnosticTests,
+  createDiagnosticTest,
   updateDiagnosticTest,
+  deleteDiagnosticTest,
   type DiagnosticTest,
 } from "@/services/lab-tech.service";
+import { useLabTech } from "@/contexts/LabTechContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +33,7 @@ import {
 import { Link } from "react-router-dom";
 
 export default function TestTypesPage() {
+  const { centerId } = useLabTech();
   const [tests, setTests] = useState<DiagnosticTest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -47,13 +51,13 @@ export default function TestTypesPage() {
 
   useEffect(() => {
     loadTests();
-  }, []);
+  }, [centerId]);
 
   async function loadTests() {
     try {
       setLoading(true);
       setError("");
-      const data = await getDiagnosticTests();
+      const data = await getDiagnosticTests(centerId || undefined);
       setTests(data);
     } catch (err: any) {
       setError(err?.message || "Failed to load diagnostic tests.");

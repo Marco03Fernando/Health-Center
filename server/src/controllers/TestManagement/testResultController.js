@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const TestResult = require("../../models/TestManagement/TestResult");
-require("../../models/Appoinment"); 
+const Booking = require("../../models/Appoinment");
+require("../../models/DiagnosticTest"); // register 'testType' model for populate
 
 // Create new test result
 exports.createTestResult = async (req, res) => {
@@ -12,14 +13,23 @@ exports.createTestResult = async (req, res) => {
   }
 };
 
-// Get all test results
+// Get all test results (optionally filtered by centerId via related booking)
 exports.getAllTestResults = async (req, res) => {
   try {
-    const results = await TestResult.find()
+    const { centerId } = req.query;
+
+    let appointmentIds;
+    if (centerId) {
+      const bookings = await Booking.find({ healthCenter: centerId }, "_id").lean();
+      appointmentIds = bookings.map((b) => b._id);
+    }
+
+    const filter = centerId ? { appointmentId: { $in: appointmentIds } } : {};
+
+    const results = await TestResult.find(filter)
       .populate("appointmentId")
-      .populate("testTypeId")
-      //.populate("patientId")
-      //.populate("doctorId");
+      .populate("testTypeId");
+
     res.status(200).json({ success: true, data: results });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
@@ -30,10 +40,7 @@ exports.getAllTestResults = async (req, res) => {
 exports.getTestResultById = async (req, res) => {
   try {
     const result = await TestResult.findById(req.params.id)
-      //.populate("appointmentId")
-      .populate("testTypeId")
-      //.populate("patientId")
-      //.populate("doctorId");
+      .populate("testTypeId");
 
     if (!result) return res.status(404).json({ success: false, error: "Not found" });
 

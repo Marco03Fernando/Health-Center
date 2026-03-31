@@ -49,7 +49,7 @@ async function loginAdmin(req, res) {
     const normalizedEmail = String(email).trim().toLowerCase();
     const admin = await Admin.findOne({ email: normalizedEmail })
       .select("+password")
-      .populate("centerId", "_id name");
+      .populate("centerId", "_id name address district openingTime closingTime");
     if (!admin || !admin.isActive) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
@@ -81,8 +81,14 @@ async function loginAdmin(req, res) {
           id: admin._id,
           name: admin.name,
           email: admin.email,
-          role: admin.role,          centerId: admin.centerId?._id || admin.centerId || null,
-          centerName: admin.centerId?.name || null,        },
+          role: admin.role,
+          centerId: admin.centerId?._id || admin.centerId || null,
+          centerName: admin.centerId?.name || null,
+          centerAddress: admin.centerId?.address || null,
+          centerDistrict: admin.centerId?.district || null,
+          centerOpeningTime: admin.centerId?.openingTime || null,
+          centerClosingTime: admin.centerId?.closingTime || null,
+        },
         token,
       });
     });
@@ -93,7 +99,7 @@ async function loginAdmin(req, res) {
 
 async function getAdminMe(req, res) {
   try {
-    const admin = await Admin.findById(req.admin._id).populate("centerId", "_id name");
+    const admin = await Admin.findById(req.admin._id).populate("centerId", "_id name address district openingTime closingTime");
     if (!admin) return res.status(404).json({ message: "Admin not found" });
 
     return res.json({
@@ -104,6 +110,10 @@ async function getAdminMe(req, res) {
         role: admin.role,
         centerId: admin.centerId?._id || admin.centerId || null,
         centerName: admin.centerId?.name || null,
+        centerAddress: admin.centerId?.address || null,
+        centerDistrict: admin.centerId?.district || null,
+        centerOpeningTime: admin.centerId?.openingTime || null,
+        centerClosingTime: admin.centerId?.closingTime || null,
       },
     });
   } catch (err) {
