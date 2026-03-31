@@ -48,17 +48,17 @@ exports.getTestById = async (req, res, next) => {
  */
 exports.createTest = async (req, res, next) => {
   try {
-    const { name, description, preparationInstructions } = req.body;
+    const { name, description, instructions } = req.body;
 
     // Validate required fields
-    if (!name || !preparationInstructions) {
+    if (!name || !instructions) {
       throw new ApiError(400, "Name and preparation instructions are required");
     }
 
     const test = await DiagnosticTest.create({
       name,
       description,
-      preparationInstructions,
+      instructions,
     });
 
     res.status(201).json({

@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useCenterAdmin } from "@/contexts/CenterAdminContext";
 import { apiFetch } from "@/lib/api";
+import {
+  isSlotExpired,
+  getSlotDisplayStatus,
+  getSlotUTCDateStr,
+  SLOT_STATUS_STYLES,
+  SLOT_STATUS_LABEL,
+  SLOT_CARD_BG,
+} from "@/lib/slotUtils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,13 +28,19 @@ import {
 import {
   CalendarDays,
   Loader2,
-  Trash2,
+  PowerOff,
+  Eye,
   RefreshCw,
   Plus,
   Clock,
   ChevronDown,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type SlotStatus = "AVAILABLE" | "BOOKED" | "CANCELLED";
 
 type Slot = {
   _id: string;
@@ -33,21 +48,38 @@ type Slot = {
   slotDate: string;
   startTime: string;
   endTime: string;
-  status: "AVAILABLE" | "BOOKED" | "CANCELLED";
+  status: SlotStatus;
+  /**
+   * When BOOKED: the backend populates this field as a booking object.
+   * It may be a string ID or a populated object { _id: string, ... }.
+   */
+  appoinment?: string | { _id: string } | null;
 };
+
+/** Extract booking ID regardless of whether appoinment is a string or populated object. */
+function getBookingId(slot: Slot): string | null {
+  if (!slot.appoinment) return null;
+  if (typeof slot.appoinment === "string") return slot.appoinment;
+  return slot.appoinment._id || null;
+}
 
 type SlotsByDate = Record<string, Slot[]>;
 
-const STATUS_COLORS: Record<string, string> = {
-  AVAILABLE: "bg-success/10 text-success border-success/20",
-  BOOKED: "bg-info/10 text-info border-info/20",
-  CANCELLED: "bg-destructive/10 text-destructive border-destructive/20",
+type ActiveTab = "today" | "upcoming" | "expired";
+
+type GenerateForm = {
+  startDate: string;
+  numberOfDays: string;
+  openingTime: string;
+  closingTime: string;
+  slotMinutes: string;
 };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function groupByDate(slots: Slot[]): SlotsByDate {
   return slots.reduce<SlotsByDate>((acc, slot) => {
-    const d = new Date(slot.slotDate);
-    const key = d.toLocaleDateString("en-US", {
+    const key = new Date(slot.slotDate).toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
       day: "numeric",
@@ -59,29 +91,172 @@ function groupByDate(slots: Slot[]): SlotsByDate {
   }, {});
 }
 
+function buildEndDate(startDate: string, numberOfDays: number): string {
+  const d = new Date(startDate);
+  d.setDate(d.getDate() + numberOfDays - 1);
+  return d.toISOString().split("T")[0];
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+type SlotCardProps = {
+  slot: Slot;
+  processingId: string | null;
+  onCancel: (id: string) => void;
+  onViewBooking: (bookingId: string) => void;
+};
+
+function SlotCard({ slot, processingId, onCancel, onViewBooking }: SlotCardProps) {
+  const displayStatus = getSlotDisplayStatus(slot);
+  const isProcessing = processingId === slot._id;
+
+  return (
+    <div
+      className={`flex items-center justify-between rounded-xl border px-4 py-3 transition-colors ${SLOT_CARD_BG[displayStatus]}`}
+    >
+      <div className="flex items-center gap-2 font-medium text-sm">
+        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+        {slot.startTime} — {slot.endTime}
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0">
+        {displayStatus === "AVAILABLE" && (
+          <button
+            title="Cancel Slot"
+            disabled={isProcessing}
+            onClick={() => onCancel(slot._id)}
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-50"
+          >
+            {isProcessing
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : <PowerOff className="h-3.5 w-3.5" />
+            }
+          </button>
+        )}
+
+        {displayStatus === "BOOKED" && getBookingId(slot) && (
+          <button
+            title="View Booking Details"
+            onClick={() => onViewBooking(getBookingId(slot)!)}
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-info/10 hover:text-info transition-colors"
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </button>
+        )}
+
+        <Badge
+          variant="secondary"
+          className={`rounded-full border px-2.5 py-0.5 text-[11px] ${SLOT_STATUS_STYLES[displayStatus]}`}
+        >
+          {SLOT_STATUS_LABEL[displayStatus]}
+        </Badge>
+      </div>
+    </div>
+  );
+}
+
+type DateGroupProps = {
+  dateKey: string;
+  slots: Slot[];
+  isExpanded: boolean;
+  processingId: string | null;
+  onToggle: (key: string) => void;
+  onCancelSlot: (id: string) => void;
+  onViewBooking: (bookingId: string) => void;
+  /** When provided, a delete icon appears in the header (expired tab only). */
+  onDeleteDate?: () => void;
+};
+
+function DateGroup({
+  dateKey, slots, isExpanded, processingId, onToggle, onCancelSlot, onViewBooking, onDeleteDate,
+}: DateGroupProps) {
+  const sorted = useMemo(
+    () => [...slots].sort((a, b) => a.startTime.localeCompare(b.startTime)),
+    [slots],
+  );
+
+  return (
+    <div>
+      <button
+        className="flex w-full items-center justify-between rounded-xl border bg-muted/30 px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
+        onClick={() => onToggle(dateKey)}
+      >
+        <span>{dateKey}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{slots.length} slots</span>
+          {onDeleteDate && (
+            <span
+              role="button"
+              title="Delete expired slots for this date"
+              onClick={(e) => { e.stopPropagation(); onDeleteDate(); }}
+              className="rounded-lg p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </span>
+          )}
+          {isExpanded
+            ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          }
+        </div>
+      </button>
+
+      {isExpanded && (
+        <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {sorted.map((slot) => (
+            <SlotCard
+              key={slot._id}
+              slot={slot}
+              processingId={processingId}
+              onCancel={onCancelSlot}
+              onViewBooking={onViewBooking}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+const TODAY = (() => {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+})();
+
+const DEFAULT_FORM: GenerateForm = {
+  startDate: TODAY,
+  numberOfDays: "3",
+  openingTime: "08:00",
+  closingTime: "17:00",
+  slotMinutes: "30",
+};
+
 export default function SlotManagementPage() {
   const { centerId } = useCenterAdmin();
+  const navigate = useNavigate();
 
   const [allSlots, setAllSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<ActiveTab>("today");
+  const [form, setForm] = useState<GenerateForm>(DEFAULT_FORM);
 
-  const [activeTab, setActiveTab] = useState<"today" | "upcoming" | "expired">("today");
+  // ── Delete-expired state ─────────────────────────────────────────────────────
+  const [deletingExpired, setDeletingExpired] = useState(false);
+  /** UTC date string (YYYY-MM-DD) awaiting delete confirmation, or null when dialog is closed. */
+  const [deleteConfirmDate, setDeleteConfirmDate] = useState<string | null>(null);
+  const [confirmDeleteAllExpired, setConfirmDeleteAllExpired] = useState(false);
+  /** Fetched from center: read-only in the generate form. */
+  const [centerHours, setCenterHours] = useState<{ openingTime?: string; closingTime?: string } | null>(null);
 
-  // Generate form
-  const today = new Date().toISOString().split("T")[0];
-  const [form, setForm] = useState({
-    startDate: today,
-    numberOfDays: "3",
-    openingTime: "08:00",
-    closingTime: "17:00",
-    slotMinutes: "30",
-  });
+  // ── Data fetching ────────────────────────────────────────────────────────────
 
   async function fetchSlots() {
     if (!centerId) { setLoading(false); return; }
@@ -100,45 +275,65 @@ export default function SlotManagementPage() {
 
   useEffect(() => { fetchSlots(); }, [centerId]);
 
-  const todayStr = today;
+  // Fetch center opening/closing hours once to pre-fill generate form
+  useEffect(() => {
+    if (!centerId) return;
+    apiFetch("/centers/admin/all")
+      .then((res) => {
+        const list: any[] = Array.isArray(res?.data) ? res.data : [];
+        const found = list.find((c: any) => c._id === centerId);
+        if (found) {
+          setCenterHours({ openingTime: found.openingTime, closingTime: found.closingTime });
+          setForm((prev) => ({
+            ...prev,
+            openingTime: found.openingTime || prev.openingTime,
+            closingTime: found.closingTime || prev.closingTime,
+          }));
+        }
+      })
+      .catch(() => { /* silently ignore – form retains defaults */ });
+  }, [centerId]);
 
+  // ── Derived slot lists ───────────────────────────────────────────────────────
+
+  /** ALL today's slots — available, booked, and expired — for display in the Today tab. */
   const todaySlots = useMemo(
-    () =>
-      allSlots.filter((s) => {
-        const d = new Date(s.slotDate).toISOString().split("T")[0];
-        return d === todayStr;
-      }),
-    [allSlots, todayStr]
+    () => allSlots.filter((s) => getSlotUTCDateStr(s.slotDate) === TODAY),
+    [allSlots],
   );
 
+  /** Count of available (non-expired) slots today — shown in the tab badge. */
+  const todayAvailableCount = useMemo(
+    () => todaySlots.filter((s) => s.status === "AVAILABLE" && !isSlotExpired(s)).length,
+    [todaySlots],
+  );
+
+  /** Future-dated slots — tomorrow onwards, can never be expired. */
   const upcomingSlots = useMemo(
-    () =>
-      allSlots.filter((s) => {
-        const d = new Date(s.slotDate).toISOString().split("T")[0];
-        return d > todayStr;
-      }),
-    [allSlots, todayStr]
+    () => allSlots.filter((s) => getSlotUTCDateStr(s.slotDate) > TODAY),
+    [allSlots],
   );
 
+  /** All slots whose end time has already passed, including today's past slots. */
   const expiredSlots = useMemo(
-    () =>
-      allSlots.filter((s) => {
-        const d = new Date(s.slotDate).toISOString().split("T")[0];
-        return d < todayStr;
-      }),
-    [allSlots, todayStr]
+    () => allSlots.filter((s) => isSlotExpired(s)),
+    [allSlots],
   );
 
   const displaySlots =
-    activeTab === "today" ? todaySlots : activeTab === "upcoming" ? upcomingSlots : expiredSlots;
+    activeTab === "today" ? todaySlots
+    : activeTab === "upcoming" ? upcomingSlots
+    : expiredSlots;
 
   const grouped = useMemo(() => groupByDate(displaySlots), [displaySlots]);
   const sortedDates = useMemo(() => Object.keys(grouped).sort(), [grouped]);
 
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+
   function toggleDate(dateKey: string) {
     setExpandedDates((prev) => {
       const next = new Set(prev);
-      if (next.has(dateKey)) next.delete(dateKey); else next.add(dateKey);
+      next.has(dateKey) ? next.delete(dateKey) : next.add(dateKey);
       return next;
     });
   }
@@ -150,25 +345,15 @@ export default function SlotManagementPage() {
       setGenerating(true);
       setError("");
       setSuccessMsg("");
-
-      const endDate = (() => {
-        const d = new Date(form.startDate);
-        d.setDate(d.getDate() + Number(form.numberOfDays) - 1);
-        return d.toISOString().split("T")[0];
-      })();
-
       await apiFetch("/generateSlots", {
         method: "POST",
         body: JSON.stringify({
-          centerId,
-          startDate: form.startDate,
-          endDate,
-          openingTime: form.openingTime,
-          closingTime: form.closingTime,
-          slotDurationMinutes: Number(form.slotMinutes),
+          healthCenterId: centerId,
+          startDateStr: form.startDate,
+          numberOfDays: Number(form.numberOfDays),
+          slotMinutes: Number(form.slotMinutes),
         }),
       });
-
       setSuccessMsg("Slots generated successfully.");
       await fetchSlots();
     } catch (err: any) {
@@ -178,24 +363,68 @@ export default function SlotManagementPage() {
     }
   }
 
-  async function handleDelete(slotId: string) {
+  async function handleCancelSlot(slotId: string) {
     try {
-      setDeletingId(slotId);
+      setProcessingId(slotId);
       setError("");
-      await apiFetch(`/deleteSlot/${slotId}`, { method: "DELETE" });
-      setAllSlots((prev) => prev.filter((s) => s._id !== slotId));
-      setConfirmDeleteId(null);
+      await apiFetch(`/updateSlot/${slotId}`, {
+        method: "PUT",
+        body: JSON.stringify({ status: "CANCELLED" }),
+      });
+      // Optimistic update — avoids a full refetch
+      setAllSlots((prev) =>
+        prev.map((s) => (s._id === slotId ? { ...s, status: "CANCELLED" as SlotStatus } : s)),
+      );
+      setConfirmCancelId(null);
     } catch (err: any) {
-      setError(err.message || "Failed to delete slot");
+      setError(err.message || "Failed to cancel slot");
     } finally {
-      setDeletingId(null);
+      setProcessingId(null);
     }
   }
 
-  const tabs: { key: typeof activeTab; label: string; count: number }[] = [
-    { key: "today", label: "Slots Today", count: todaySlots.length },
-    { key: "upcoming", label: "Upcoming Slots", count: upcomingSlots.length },
-    { key: "expired", label: "Expired Slots", count: expiredSlots.length },
+  function handleViewBooking(bookingId: string) {
+    navigate(`/center-admin/lab-bookings/${bookingId}`);
+  }
+
+  async function handleDeleteExpiredByDate(utcDate: string) {
+    if (!centerId) return;
+    try {
+      setDeletingExpired(true);
+      setError("");
+      await apiFetch(`/deleteExpiredUnbooked?centerId=${centerId}&date=${utcDate}`, { method: "DELETE" });
+      setSuccessMsg(`Expired slots for ${utcDate} deleted.`);
+      setDeleteConfirmDate(null);
+      await fetchSlots();
+    } catch (err: any) {
+      setError(err.message || "Failed to delete expired slots");
+    } finally {
+      setDeletingExpired(false);
+    }
+  }
+
+  async function handleDeleteAllExpired() {
+    if (!centerId) return;
+    try {
+      setDeletingExpired(true);
+      setError("");
+      await apiFetch(`/deleteExpiredUnbooked?centerId=${centerId}`, { method: "DELETE" });
+      setSuccessMsg("All expired unbooked slots deleted.");
+      setConfirmDeleteAllExpired(false);
+      await fetchSlots();
+    } catch (err: any) {
+      setError(err.message || "Failed to delete expired slots");
+    } finally {
+      setDeletingExpired(false);
+    }
+  }
+
+  // ── Tab config ───────────────────────────────────────────────────────────────
+
+  const tabs: { key: ActiveTab; label: string; count: number }[] = [
+    { key: "today",    label: "Today",    count: todayAvailableCount },
+    { key: "upcoming", label: "Upcoming", count: upcomingSlots.length },
+    { key: "expired",  label: "Expired",  count: expiredSlots.length },
   ];
 
   return (
@@ -229,7 +458,7 @@ export default function SlotManagementPage() {
                   <Input
                     id="startDate"
                     type="date"
-                    min={today}
+                    min={TODAY}
                     value={form.startDate}
                     onChange={(e) => setForm({ ...form, startDate: e.target.value })}
                     className="rounded-xl"
@@ -264,25 +493,29 @@ export default function SlotManagementPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="openingTime">Opening Time</Label>
+                  <Label htmlFor="openingTime">
+                    Opening Time{" "}
+                    <span className="text-xs text-muted-foreground">(from center)</span>
+                  </Label>
                   <Input
                     id="openingTime"
                     type="time"
                     value={form.openingTime}
-                    onChange={(e) => setForm({ ...form, openingTime: e.target.value })}
-                    className="rounded-xl"
-                    required
+                    disabled
+                    className="rounded-xl opacity-60 cursor-not-allowed"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="closingTime">Closing Time</Label>
+                  <Label htmlFor="closingTime">
+                    Closing Time{" "}
+                    <span className="text-xs text-muted-foreground">(from center)</span>
+                  </Label>
                   <Input
                     id="closingTime"
                     type="time"
                     value={form.closingTime}
-                    onChange={(e) => setForm({ ...form, closingTime: e.target.value })}
-                    className="rounded-xl"
-                    required
+                    disabled
+                    className="rounded-xl opacity-60 cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -342,6 +575,22 @@ export default function SlotManagementPage() {
             </Button>
           </div>
 
+          {/* Delete all expired toolbar — visible on expired tab when there are expired slots */}
+          {activeTab === "expired" && expiredSlots.length > 0 && (
+            <div className="flex items-center justify-end mb-4">
+              <Button
+                variant="destructive"
+                size="sm"
+                className="rounded-xl gap-1.5"
+                onClick={() => setConfirmDeleteAllExpired(true)}
+                disabled={deletingExpired}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete All Expired
+              </Button>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center rounded-2xl border border-dashed py-16 text-muted-foreground">
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -350,80 +599,29 @@ export default function SlotManagementPage() {
           ) : displaySlots.length === 0 ? (
             <div className="rounded-2xl border border-dashed p-10 text-center">
               <CalendarDays className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-              <p className="text-sm font-medium">No slots found</p>
+              <p className="text-sm font-medium">No slots for this view</p>
             </div>
           ) : (
             <div className="space-y-4">
               {sortedDates.map((dateKey) => {
-                const dateSlots = grouped[dateKey];
-                const isExpanded = expandedDates.has(dateKey);
+                const groupSlots = grouped[dateKey];
+                const utcDate = getSlotUTCDateStr(groupSlots[0].slotDate);
                 return (
-                  <div key={dateKey}>
-                    <button
-                      className="flex w-full items-center justify-between rounded-xl border bg-muted/30 px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
-                      onClick={() => toggleDate(dateKey)}
-                    >
-                      <span>{dateKey}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">{dateSlots.length} slots</span>
-                        {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                        )}
-                      </div>
-                    </button>
-
-                    {isExpanded && (
-                      <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                        {dateSlots
-                          .sort((a, b) => a.startTime.localeCompare(b.startTime))
-                          .map((slot) => (
-                            <div
-                              key={slot._id}
-                              className={`flex items-center justify-between rounded-xl border px-4 py-3 ${
-                                slot.status === "CANCELLED"
-                                  ? "bg-destructive/5"
-                                  : slot.status === "BOOKED"
-                                  ? "bg-info/5"
-                                  : "bg-background"
-                              }`}
-                            >
-                              <div>
-                                <div className="flex items-center gap-2 font-medium text-sm">
-                                  <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                                  {slot.startTime} — {slot.endTime}
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {centerId && (slot as any).centerName ? (slot as any).centerName : ""}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <Badge
-                                  variant="secondary"
-                                  className={`rounded-full border px-2.5 py-0.5 text-[11px] ${STATUS_COLORS[slot.status] || "bg-muted text-muted-foreground border-transparent"}`}
-                                >
-                                  {slot.status.charAt(0) + slot.status.slice(1).toLowerCase()}
-                                </Badge>
-                                {slot.status === "AVAILABLE" && (
-                                  <button
-                                    onClick={() => setConfirmDeleteId(slot._id)}
-                                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-                                    disabled={deletingId === slot._id}
-                                  >
-                                    {deletingId === slot._id ? (
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    ) : (
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    )}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                  </div>
+                  <DateGroup
+                    key={dateKey}
+                    dateKey={dateKey}
+                    slots={groupSlots}
+                    isExpanded={expandedDates.has(dateKey)}
+                    processingId={processingId}
+                    onToggle={toggleDate}
+                    onCancelSlot={(id) => setConfirmCancelId(id)}
+                    onViewBooking={handleViewBooking}
+                    onDeleteDate={
+                      activeTab === "expired"
+                        ? () => setDeleteConfirmDate(utcDate)
+                        : undefined
+                    }
+                  />
                 );
               })}
             </div>
@@ -431,22 +629,72 @@ export default function SlotManagementPage() {
         </CardContent>
       </Card>
 
-      {/* Delete confirm dialog */}
-      <AlertDialog open={!!confirmDeleteId} onOpenChange={() => setConfirmDeleteId(null)}>
+      {/* Delete ALL expired slots confirmation */}
+      <AlertDialog open={confirmDeleteAllExpired} onOpenChange={setConfirmDeleteAllExpired}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Slot?</AlertDialogTitle>
+            <AlertDialogTitle>Delete all expired unbooked slots?</AlertDialogTitle>
             <AlertDialogDescription>
-              This slot will be permanently deleted and cannot be recovered.
+              All expired, unbooked slots for this center will be permanently deleted.
+              Booked slots will not be affected. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => { if (confirmDeleteId) handleDelete(confirmDeleteId); }}
+              disabled={deletingExpired}
+              onClick={handleDeleteAllExpired}
             >
-              Delete
+              {deletingExpired ? "Deleting…" : "Delete All"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete expired slots by date confirmation */}
+      <AlertDialog
+        open={!!deleteConfirmDate}
+        onOpenChange={() => setDeleteConfirmDate(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete expired slots for {deleteConfirmDate}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Only unbooked expired slots for this date will be deleted.
+              Booked slots will not be affected. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deletingExpired}
+              onClick={() => { if (deleteConfirmDate) handleDeleteExpiredByDate(deleteConfirmDate); }}
+            >
+              {deletingExpired ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cancel slot confirmation */}
+      <AlertDialog open={!!confirmCancelId} onOpenChange={() => setConfirmCancelId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel this slot?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The slot will be marked as Cancelled. Patients will no longer be able to book it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={!!processingId}
+              onClick={() => { if (confirmCancelId) handleCancelSlot(confirmCancelId); }}
+            >
+              {processingId ? "Cancelling..." : "Cancel Slot"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

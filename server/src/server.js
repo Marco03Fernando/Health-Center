@@ -406,6 +406,11 @@ app.use("/api/lab/diagnostic-tests", diagnosticTestRoutes);
 app.use(labAppointmentRoutes);
 app.use(labSlotRoutes);
 
+// Lab Test management route
+app.use("/api/test-types", require("../../server/src/routes/TestManagement/testTypeRoutes"));
+app.use("/api/test-results", require("../../server/src/routes/TestManagement/testResultRoutes"));
+
+
 // Error handler
 app.use(errorMiddleware);
 

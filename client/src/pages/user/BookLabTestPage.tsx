@@ -11,7 +11,7 @@ type DiagnosticTest = {
   _id: string;
   name: string;
   description?: string;
-  preparationInstructions?: string;
+  instructions?: string;
   isActive?: boolean;
 };
 
@@ -329,12 +329,26 @@ const BookLabTestPage = () => {
 
   const availableForDate =
     selectedDate && selectedCenter
-      ? slots.filter(
-          (s) =>
-            s.center === selectedCenter &&
-            getUTCDateString(s.slotDate) === localDateToString(selectedDate) &&
-            s.status === "AVAILABLE"
-        )
+      ? slots.filter((s) => {
+          if (
+            s.center !== selectedCenter ||
+            getUTCDateString(s.slotDate) !== localDateToString(selectedDate) ||
+            s.status !== "AVAILABLE"
+          )
+            return false;
+
+          // If the selected date is today, hide slots whose start time has already passed
+          const todayStr = localDateToString(new Date());
+          if (localDateToString(selectedDate) === todayStr) {
+            const now = new Date();
+            const [slotHour, slotMin] = s.startTime.split(":").map(Number);
+            const currentMinutes = now.getHours() * 60 + now.getMinutes();
+            const slotMinutes = slotHour * 60 + slotMin;
+            return slotMinutes > currentMinutes;
+          }
+
+          return true;
+        })
       : [];
 
   const selectedTestObj = tests.find((t) => t._id === selectedTest);
@@ -424,10 +438,10 @@ const BookLabTestPage = () => {
                               {t.description}
                             </div>
                           )}
-                          {t.preparationInstructions && (
+                          {t.instructions && (
                             <div className="text-xs text-primary/70 italic">
                               <span className="font-semibold not-italic">Prep: </span>
-                              {t.preparationInstructions}
+                              {t.instructions}
                             </div>
                           )}
                         </div>
@@ -509,25 +523,27 @@ const BookLabTestPage = () => {
                 <h2 className="font-display font-semibold text-foreground mb-4">
                   Choose Date &amp; Time Slot
                 </h2>
-                <div className="grid md:grid-cols-2 gap-5">
-                  <MiniCalendar
-                    slots={slots.filter((s) => s.center === selectedCenter)}
-                    onSelectDate={(d) => {
-                      setSelectedDate(d);
-                      setSelectedSlot(null);
-                    }}
-                  />
-                  <div>
+                <div className="grid md:grid-cols-2 gap-5 items-start">
+                  <div className="self-start">
+                    <MiniCalendar
+                      slots={slots.filter((s) => s.center === selectedCenter)}
+                      onSelectDate={(d) => {
+                        setSelectedDate(d);
+                        setSelectedSlot(null);
+                      }}
+                    />
+                  </div>
+                  <div className="flex flex-col">
                     <h3 className="font-medium text-sm text-foreground mb-3">
                       {selectedDate
                         ? `Slots on ${selectedDate.toDateString()}`
                         : "Select a highlighted date"}
                     </h3>
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                       {availableForDate.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
                           {selectedDate
-                            ? "No slots available for this date."
+                            ? "No available slots for this date."
                             : "Pick a date with a dot to see available slots."}
                         </p>
                       ) : (

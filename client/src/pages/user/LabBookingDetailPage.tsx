@@ -3,9 +3,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Calendar,
+  CalendarPlus,
   Clock,
+  ExternalLink,
   FlaskConical,
   MapPin,
+  Navigation,
   Phone,
   Printer,
   AlertTriangle,
@@ -38,7 +41,7 @@ type BookingDetail = {
     _id: string;
     name: string;
     description?: string;
-    preparationInstructions?: string;
+    instructions?: string;
   } | null;
   healthCenter?: {
     _id: string;
@@ -62,6 +65,52 @@ const statusBadgeMap: Record<
   COMPLETED: "completed",
   CANCELLED: "cancelled",
 };
+
+function buildGoogleCalendarUrl(booking: BookingDetail): string | null {
+  const rawDate = booking?.slot?.slotDate || booking?.appointmentDate;
+  if (!rawDate || !booking?.slot?.startTime) return null;
+
+  const d = new Date(rawDate);
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const dateStr = `${year}${month}${day}`;
+
+  const fmtTime = (t: string) => t.replace(":", "") + "00";
+  const startDT = `${dateStr}T${fmtTime(booking.slot!.startTime!)}`;
+  const endDT = booking.slot?.endTime
+    ? `${dateStr}T${fmtTime(booking.slot.endTime)}`
+    : startDT;
+
+  const title = encodeURIComponent(booking.diagnosticTest?.name || "Lab Test");
+  const location = encodeURIComponent(
+    [booking.healthCenter?.name, booking.healthCenter?.address]
+      .filter(Boolean)
+      .join(", ")
+  );
+
+  let details = `Booking ID: ${booking._id}`;
+  if (booking.diagnosticTest?.description) {
+    details += `\n\n${booking.diagnosticTest.description}`;
+  }
+  if (booking.diagnosticTest?.instructions) {
+    details += `\n\nPreparation: ${booking.diagnosticTest.instructions}`;
+  }
+  details += "\n\nPlease arrive 15 minutes early.";
+
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDT}/${endDT}&details=${encodeURIComponent(details)}&location=${location}`;
+}
+
+function buildGoogleMapsUrl(
+  healthCenter: BookingDetail["healthCenter"]
+): string | null {
+  if (!healthCenter) return null;
+  const query = [healthCenter.name, healthCenter.address]
+    .filter(Boolean)
+    .join(", ");
+  if (!query) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
 
 const LabBookingDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -124,6 +173,9 @@ const LabBookingDetailPage = () => {
       day: "numeric",
     });
   })();
+
+  const calendarUrl = booking ? buildGoogleCalendarUrl(booking) : null;
+  const mapsUrl = booking ? buildGoogleMapsUrl(booking.healthCenter ?? null) : null;
 
   if (loading) {
     return (
@@ -275,8 +327,7 @@ const LabBookingDetailPage = () => {
           </div>
 
           {/* ── Test information ── */}
-          {(booking.diagnosticTest?.description ||
-            booking.diagnosticTest?.preparationInstructions) && (
+          {booking.diagnosticTest && (
             <>
               <Separator />
               <div className="py-5 space-y-4">
@@ -284,7 +335,7 @@ const LabBookingDetailPage = () => {
                   Test Information
                 </h2>
 
-                {booking.diagnosticTest?.description && (
+                {booking.diagnosticTest.description && (
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">About this test</p>
                     <p className="text-sm text-foreground leading-relaxed">
@@ -293,25 +344,76 @@ const LabBookingDetailPage = () => {
                   </div>
                 )}
 
-                {booking.diagnosticTest?.preparationInstructions && (
-                  <div className="flex gap-3 rounded-lg border border-warning/30 bg-warning/5 p-4">
-                    <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-foreground mb-1">
-                        Preparation Instructions
-                      </p>
-                      <p className="text-sm text-foreground/80 leading-relaxed">
-                        {booking.diagnosticTest.preparationInstructions}
-                      </p>
-                    </div>
+                {/* Preparation instructions — always shown when test exists */}
+                <div className="rounded-lg border border-warning/40 bg-warning/10 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
+                    <p className="text-sm font-semibold text-foreground">
+                      Preparation Instructions
+                    </p>
                   </div>
-                )}
+                  <p className="text-sm text-foreground/80 leading-relaxed pl-6">
+                    {booking.diagnosticTest.instructions
+                      ? booking.diagnosticTest.instructions
+                      : "No specific preparation required. Follow standard fasting guidelines if unsure."}
+                  </p>
+                  <div className="flex items-center gap-1.5 pl-6 pt-1 border-t border-warning/20">
+                    <Clock className="w-3 h-3 text-warning/70 shrink-0" />
+                    <p className="text-xs text-muted-foreground italic">
+                      Please arrive 15 minutes early.
+                    </p>
+                  </div>
+                </div>
               </div>
             </>
           )}
 
         </div>
         {/* ── end printable ── */}
+
+        {/* ── Action cards: Calendar + Maps ── */}
+        {(calendarUrl || mapsUrl) && (
+          <div className="grid sm:grid-cols-2 gap-3 no-print">
+            {calendarUrl && (
+              <a
+                href={calendarUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-center gap-4 rounded-xl border border-primary/20 bg-primary/5 p-4 transition-colors hover:bg-primary/10 hover:border-primary/40"
+              >
+                <div className="w-10 h-10 rounded-full bg-primary/15 flex items-center justify-center shrink-0 group-hover:bg-primary/25 transition-colors">
+                  <CalendarPlus className="w-5 h-5 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Add to Calendar</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {formattedDate}{booking.slot?.startTime ? ` · ${booking.slot.startTime}` : ""}
+                  </p>
+                </div>
+                <ExternalLink className="w-3.5 h-3.5 text-muted-foreground/50 ml-auto shrink-0" />
+              </a>
+            )}
+            {mapsUrl && (
+              <a
+                href={mapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-center gap-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 transition-colors hover:bg-emerald-500/10 hover:border-emerald-500/40"
+              >
+                <div className="w-10 h-10 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0 group-hover:bg-emerald-500/25 transition-colors">
+                  <Navigation className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Get Directions</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {booking.healthCenter?.name || "View on Google Maps"}
+                  </p>
+                </div>
+                <ExternalLink className="w-3.5 h-3.5 text-muted-foreground/50 ml-auto shrink-0" />
+              </a>
+            )}
+          </div>
+        )}
 
         {/* ── Actions ── */}
         {booking.appointmentStatus === "CONFIRMED" && (

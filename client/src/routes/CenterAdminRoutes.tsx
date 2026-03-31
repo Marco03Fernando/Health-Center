@@ -10,6 +10,7 @@ import CenterAdminPrescriptionsPage from "@/pages/center-admin/PrescriptionsPage
 import CenterAdminCenterInfoPage from "@/pages/center-admin/CenterInfoPage";
 import CenterAdminSlotManagementPage from "@/pages/center-admin/SlotManagementPage";
 import CenterAdminLabBookingsPage from "@/pages/center-admin/LabBookingsPage";
+import BookingDetailPage from "@/pages/center-admin/BookingDetailPage";
 
 export default function CenterAdminRoutes() {
   return (
@@ -23,6 +24,7 @@ export default function CenterAdminRoutes() {
           <Route path="center-info"     element={<CenterAdminCenterInfoPage />} />
           <Route path="slot-management" element={<CenterAdminSlotManagementPage />} />
           <Route path="lab-bookings"    element={<CenterAdminLabBookingsPage />} />
+          <Route path="lab-bookings/:bookingId" element={<BookingDetailPage />} />
         </Route>
         <Route path=""  element={<Navigate to="/center-admin/login" replace />} />
         <Route path="*" element={<Navigate to="/center-admin/login" replace />} />

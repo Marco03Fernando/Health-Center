@@ -39,7 +39,7 @@ type LabBooking = {
   _id: string;
   appointmentStatus: BookingStatus;
   appointmentDate?: string;
-  diagnosticTest?: { _id?: string; name?: string; description?: string; preparationInstructions?: string } | null;
+  diagnosticTest?: { _id?: string; name?: string; description?: string; instructions?: string } | null;
   healthCenter?: { _id?: string; name?: string; address?: string } | null;
   slot?: { _id?: string; slotDate?: string; startTime?: string; endTime?: string } | null;
   user?: { _id?: string; fullName?: string; email?: string; phone?: string } | null;
@@ -175,15 +175,15 @@ export default function CenterLabBookingsPage() {
       <Card className="rounded-3xl border shadow-sm">
         <CardContent className="p-5 md:p-6">
           {/* Filters */}
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between mb-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-5">
             <div>
               <h2 className="text-lg font-semibold">Booking Records</h2>
               <p className="text-sm text-muted-foreground">
                 {filtered.length} of {bookings.length} bookings
               </p>
             </div>
-            <div className="flex flex-col gap-3 xl:flex-row w-full xl:w-auto">
-              <div className="relative w-full xl:min-w-[280px]">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center w-full lg:w-auto">
+              <div className="relative w-full md:min-w-[260px]">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Search by test name or patient..."
@@ -351,13 +351,13 @@ export default function CenterLabBookingsPage() {
                   </div>
                 )}
 
-                {selected.diagnosticTest?.preparationInstructions && (
+                {selected.diagnosticTest?.instructions && (
                   <div className="flex gap-3 rounded-xl border border-warning/30 bg-warning/5 p-4">
                     <AlertTriangle className="h-4 w-4 text-warning mt-0.5 shrink-0" />
                     <div>
                       <p className="text-sm font-semibold mb-1">Preparation Instructions</p>
                       <p className="text-sm text-muted-foreground">
-                        {selected.diagnosticTest.preparationInstructions}
+                        {selected.diagnosticTest.instructions}
                       </p>
                     </div>
                   </div>

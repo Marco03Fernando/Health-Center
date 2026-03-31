@@ -14,9 +14,10 @@ const DiagnosticTestSchema = new mongoose.Schema(
       default: '',
     },
 
-    preparationInstructions: {
+    instructions: {
       type: String,
       trim: true,
+      default: '',
       required: [true, 'Preparation instructions are required'],
     },
 

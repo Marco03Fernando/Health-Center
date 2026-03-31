@@ -164,15 +164,15 @@ export default function CenterDoctorsPage() {
       {/* List */}
       <Card className="rounded-3xl border shadow-sm">
         <CardContent className="p-5 md:p-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between mb-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-5">
             <div>
               <h2 className="text-lg font-semibold">Doctor Directory</h2>
               <p className="text-sm text-muted-foreground">
                 {filtered.length} of {doctors.length} doctors
               </p>
             </div>
-            <div className="flex w-full flex-col gap-3 xl:w-auto xl:flex-row">
-              <div className="relative w-full xl:min-w-[280px]">
+            <div className="flex w-full flex-col gap-3 md:flex-row md:items-center lg:w-auto">
+              <div className="relative w-full md:min-w-[260px]">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Search by name, specialization..."
