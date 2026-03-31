@@ -13,6 +13,9 @@ import UserMarketplacePage from "@/pages/user/MarketplacePage";
 import UserCartPage from "@/pages/user/CartPage";
 import UserOrdersPage from "@/pages/user/OrdersPage";
 import UserProfilePage from "@/pages/user/ProfilePage";
+import LabBookingsPage from "@/pages/user/LabBookingsPage";
+import BookLabTestPage from "@/pages/user/BookLabTestPage";
+import LabBookingDetailPage from "@/pages/user/LabBookingDetailPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useUserApp();
@@ -34,6 +37,9 @@ function UserAppRoutes() {
       <Route path="consult"        element={<ProtectedRoute><UserConsultationPage /></ProtectedRoute>} />
       <Route path="doctors/:id"    element={<ProtectedRoute><UserDoctorProfilePage /></ProtectedRoute>} />
       <Route path="appointments"   element={<ProtectedRoute><UserAppointmentsPage /></ProtectedRoute>} />
+      <Route path="lab-bookings"   element={<ProtectedRoute><LabBookingsPage /></ProtectedRoute>} />
+      <Route path="lab-bookings/new" element={<ProtectedRoute><BookLabTestPage /></ProtectedRoute>} />
+      <Route path="lab-bookings/:id" element={<ProtectedRoute><LabBookingDetailPage /></ProtectedRoute>} />
       <Route path="prescriptions"  element={<ProtectedRoute><UserPrescriptionsPage /></ProtectedRoute>} />
       <Route path="marketplace"    element={<ProtectedRoute><UserMarketplacePage /></ProtectedRoute>} />
       <Route path="cart"           element={<ProtectedRoute><UserCartPage /></ProtectedRoute>} />

@@ -14,18 +14,20 @@ import {
   ShoppingCart,
   Menu,
   X,
+  FlaskConical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { to: "/user",               label: "Dashboard",    icon: LayoutDashboard },
-  { to: "/user/consult",       label: "Consult",      icon: Stethoscope },
-  { to: "/user/appointments",  label: "Appointments", icon: CalendarCheck },
-  { to: "/user/prescriptions", label: "Prescriptions",icon: FileText },
-  { to: "/user/marketplace",   label: "Pharmacy",     icon: ShoppingBag },
-  { to: "/user/orders",        label: "Orders",       icon: Package },
-  { to: "/user/profile",       label: "Profile",      icon: User },
+  { to: "/user",                  label: "Dashboard",    icon: LayoutDashboard },
+  { to: "/user/consult",          label: "Consult",      icon: Stethoscope },
+  { to: "/user/appointments",     label: "Appointments", icon: CalendarCheck },
+  { to: "/user/lab-bookings",     label: "Lab Bookings", icon: FlaskConical },
+  { to: "/user/prescriptions",    label: "Prescriptions",icon: FileText },
+  { to: "/user/marketplace",      label: "Pharmacy",     icon: ShoppingBag },
+  { to: "/user/orders",           label: "Orders",       icon: Package },
+  { to: "/user/profile",          label: "Profile",      icon: User },
 ];
 
 export const UserLayout = ({ children }: { children: ReactNode }) => {
