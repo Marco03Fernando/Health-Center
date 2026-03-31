@@ -1,0 +1,121 @@
+# ==============================================================================
+# tests/auth.user.yml — Performance tests for User Authentication routes
+# Route file : server/src/routes/auth/userAuth.routes.js
+# Base URL   : http://localhost:8081
+# Endpoints tested:
+#   POST /api/auth/register  → Register a new patient
+#   POST /api/auth/login     → Log in and capture JWT for protected calls
+#   GET  /api/auth/me        → Fetch current user profile (requires JWT)
+# ==============================================================================
+#
+# Run this test:
+#   npx artillery run server/performance/tests/auth.user.yml
+#
+# Run with HTML report:
+#   npx artillery run --output report-auth-user.json server/performance/tests/auth.user.yml
+#   npx artillery report report-auth-user.json
+# ==============================================================================
+
+config:
+  # ── Target server ───────────────────────────────────────────────────────────
+  target: "http://localhost:5000"
+
+  # ── Default headers for every request in this file ─────────────────────────
+  defaults:
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+
+  # ── Load phases ─────────────────────────────────────────────────────────────
+  # Keep registration load low — avoid flooding the DB with test users.
+  # Adjust arrivalRate / duration to simulate more or less traffic.
+  phases:
+    # Phase 1 – Warm-up: gentle start so the server isn't cold-hit.
+    - name: "Warm-up"
+      duration: 15        # seconds
+      arrivalRate: 2      # 2 new virtual users per second
+
+    # Phase 2 – Ramp-up: gradually increase to realistic peak load.
+    - name: "Ramp-up"
+      duration: 30        # seconds
+      arrivalRate: 2      # start at 2 users/sec …
+      rampTo: 20          # … and climb to 20 users/sec by the end
+
+    # Phase 3 – Sustained: hold peak load to expose memory/CPU pressure.
+    - name: "Sustained load"
+      duration: 60        # seconds
+      arrivalRate: 20     # 20 new users arrive every second
+
+  # ── Plugins ─────────────────────────────────────────────────────────────────
+  # Shows per-endpoint breakdown in the final report.
+  plugins:
+    metrics-by-endpoint: {}
+
+# ==============================================================================
+# SCENARIO 1 — Register a new patient
+# Each virtual user calls POST /api/auth/register once.
+# Artillery automatically generates a unique username via {{ $randomString() }}
+# so concurrent users don't collide on the "email already exists" constraint.
+# ==============================================================================
+scenarios:
+  - name: "Register a new patient user"
+    # weight controls how often this scenario is chosen vs. others in this file.
+    # weight: 1 out of total (1+3) = 25 % of virtual users run this scenario.
+    weight: 1
+    flow:
+      # Step 1 – POST /api/auth/register
+      - post:
+          url: "/api/auth/register"
+          # json body — {{ $randomString() }} generates a unique suffix at runtime
+          json:
+            name: "Test User {{ $randomString() }}"
+            email: "testuser_{{ $randomString() }}@perf.test"
+            password: "Password123!"
+            phone: "0771234567"
+            dateOfBirth: "1995-06-15"
+            gender: "male"
+          # Capture the HTTP status so we can assert it below.
+          capture:
+            - json: "$.message"
+              as: "registerMsg"
+          # Expect a 201 (Created) response.
+          # If the server returns anything else, Artillery records it as a failure.
+          expect:
+            - statusCode: 201
+
+  # ==============================================================================
+  # SCENARIO 2 — Login then fetch profile
+  # Simulates a full authenticated session:
+  #   1. POST /api/auth/login  → server returns a JWT in the response body
+  #   2. GET  /api/auth/me     → use that JWT in the Authorization header
+  # ==============================================================================
+  - name: "Login and fetch own profile"
+    # 75 % of virtual users run this more realistic scenario.
+    weight: 3
+    flow:
+      # Step 1 – POST /api/auth/login
+      - post:
+          url: "/api/auth/login"
+          json:
+            # Replace with a real seeded test account before running.
+            # You can also use Artillery's `variables` section for multiple accounts.
+            email: "testuser@perf.test"
+            password: "Password123!"
+          # Capture the JWT token from the response so we can use it in step 2.
+          # Adjust the JSON path to match your actual response shape:
+          #   { "token": "eyJ..." }  → "$.token"
+          #   { "data": { "token": "eyJ..." } } → "$.data.token"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+          expect:
+            - statusCode: 200
+
+      # Step 2 – GET /api/auth/me using the captured token
+      - get:
+          url: "/api/auth/me"
+          headers:
+            # Pass the JWT in the Authorization header as a Bearer token.
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200

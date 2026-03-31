@@ -1,0 +1,94 @@
+# ==============================================================================
+# tests/test-types.yml — Performance tests for Diagnostic Test Type routes
+# Route file : server/src/routes/TestManagement/testTypeRoutes.js
+# Base URL   : http://localhost:8081
+# Mounted at : /api/test-types
+# Endpoints tested:
+#   GET  /api/test-types       → List all test types (high-read)
+#   POST /api/test-types       → Create a new test type
+#   GET  /api/test-types/:id   → Get single test type by ID
+# ==============================================================================
+#
+# Run this test:
+#   npx artillery run server/performance/tests/test-types.yml
+# ==============================================================================
+
+config:
+  target: "http://localhost:5000"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+
+  variables:
+    # Replace with a real test type ObjectId from your DB
+    testTypeId: "REPLACE_WITH_REAL_TEST_TYPE_ID"
+
+  phases:
+    - name: "Warm-up"
+      duration: 10
+      arrivalRate: 3
+
+    - name: "Ramp-up"
+      duration: 30
+      arrivalRate: 3
+      rampTo: 25
+
+    - name: "Sustained load"
+      duration: 60
+      arrivalRate: 25
+
+  plugins:
+    metrics-by-endpoint: {}
+
+scenarios:
+  # ============================================================================
+  # SCENARIO 1 — List all test types
+  # Patients and lab staff browse available tests.
+  # High read frequency → highest weight.
+  # ============================================================================
+  - name: "List all test types"
+    weight: 5
+    flow:
+      # GET /api/test-types
+      - get:
+          url: "/api/test-types"
+          expect:
+            - statusCode: 200
+
+  # ============================================================================
+  # SCENARIO 2 — Get a single test type by ID
+  # Fetching detail of a specific test (e.g., on the order/booking page).
+  # ============================================================================
+  - name: "Get single test type by ID"
+    weight: 3
+    flow:
+      # GET /api/test-types/:id
+      - get:
+          url: "/api/test-types/{{ testTypeId }}"
+          expect:
+            - statusCode: 200
+
+  # ============================================================================
+  # SCENARIO 3 — Create a new test type
+  # Admin/lab operation — low frequency but tests write throughput.
+  # {{ $randomString() }} creates a unique name per virtual user run to avoid
+  # unique-constraint collisions.
+  # ============================================================================
+  - name: "Create a new test type"
+    weight: 1
+    flow:
+      # POST /api/test-types
+      - post:
+          url: "/api/test-types"
+          json:
+            # Adjust fields to match your TestType Mongoose schema
+            name: "PerfTest_{{ $randomString() }}"
+            description: "Performance test auto-created diagnostic test"
+            price: 1500
+            turnaroundHours: 24
+          expect:
+            - statusCode:
+                - 200
+                - 201

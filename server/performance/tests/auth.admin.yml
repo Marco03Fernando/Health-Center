@@ -1,0 +1,86 @@
+# ==============================================================================
+# tests/auth.admin.yml — Performance tests for Admin Authentication routes
+# Route file : server/src/routes/auth/adminAuth.routes.js
+# Base URL   : http://localhost:8081
+# Endpoints tested:
+#   POST /api/admin/auth/login → Admin / doctor / lab-tech login
+#   GET  /api/admin/auth/me   → Fetch admin profile (requires JWT + role)
+#   GET  /api/admin/auth/test → Health-check (public, no auth needed)
+# ==============================================================================
+#
+# Run this test:
+#   npx artillery run server/performance/tests/auth.admin.yml
+# ==============================================================================
+
+config:
+  target: "http://localhost:5000"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+
+  phases:
+    # Admin login traffic is usually much lower than patient traffic.
+    # Keep arrivalRate modest.
+    - name: "Warm-up"
+      duration: 10
+      arrivalRate: 2
+
+    - name: "Ramp-up"
+      duration: 30
+      arrivalRate: 2
+      rampTo: 10
+
+    - name: "Sustained load"
+      duration: 45
+      arrivalRate: 10
+
+  plugins:
+    metrics-by-endpoint: {}
+
+scenarios:
+  # ============================================================================
+  # SCENARIO 1 — Admin health-check endpoint (no auth required)
+  # A simple "is the route alive?" smoke test under load.
+  # ============================================================================
+  - name: "Health-check — admin auth test route"
+    weight: 1
+    flow:
+      - get:
+          url: "/api/admin/auth/test"
+          expect:
+            - statusCode: 200
+            # Verify the response body contains the expected flag.
+            - contentType: json
+
+  # ============================================================================
+  # SCENARIO 2 — Admin login then fetch own profile
+  # Tests the full authenticated admin flow:
+  #   1. POST /api/admin/auth/login   → get JWT
+  #   2. GET  /api/admin/auth/me      → use JWT to fetch profile
+  # ============================================================================
+  - name: "Admin login and fetch profile"
+    weight: 3
+    flow:
+      # Step 1 – Login as admin
+      - post:
+          url: "/api/admin/auth/login"
+          json:
+            # Replace with a real admin account (seeded in your DB).
+            email: "admin@healthcenter.test"
+            password: "AdminPass123!"
+          # Capture the token from the body — adjust the JSON path to your response shape.
+          capture:
+            - json: "$.token"
+              as: "adminToken"
+          expect:
+            - statusCode: 200
+
+      # Step 2 – Fetch admin profile using the captured token
+      - get:
+          url: "/api/admin/auth/me"
+          headers:
+            Authorization: "Bearer {{ adminToken }}"
+          expect:
+            - statusCode: 200

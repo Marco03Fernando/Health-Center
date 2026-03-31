@@ -1,0 +1,108 @@
+# ==============================================================================
+# tests/appointments.doctor-channeling.yml
+# Route file : server/src/routes/doctorChanneling/appointment.routes.js
+# Base URL   : http://localhost:8081
+# Mounted at : /api/appointments
+# Endpoints tested:
+#   POST   /api/appointments           → Book a new channeling appointment
+#   GET    /api/appointments/user/:userId → List appointments for a patient
+#   DELETE /api/appointments/:id/cancel  → Patient cancels an appointment
+# ==============================================================================
+#
+# Run this test:
+#   npx artillery run server/performance/tests/appointments.doctor-channeling.yml
+#
+# IMPORTANT — Before running:
+#   1. Replace REPLACE_WITH_REAL_* placeholders with actual IDs from your DB.
+#   2. Replace REPLACE_WITH_REAL_SLOT_ID with an actual available (isBooked:false) slot ID.
+#   3. Replace REPLACE_WITH_REAL_APPOINTMENT_ID with a cancellable appointment ID.
+# ==============================================================================
+
+config:
+  target: "http://localhost:5000"
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+
+  variables:
+    # MongoDB ObjectId of an existing patient/user
+    userId: "REPLACE_WITH_REAL_USER_ID"
+    # MongoDB ObjectId of the doctor to book with
+    doctorId: "REPLACE_WITH_REAL_DOCTOR_ID"
+    # An available (isBooked: false) slot ObjectId
+    slotId: "REPLACE_WITH_REAL_SLOT_ID"
+    # An existing appointment that can be cancelled
+    appointmentId: "REPLACE_WITH_REAL_APPOINTMENT_ID"
+
+  phases:
+    # Write (POST/DELETE) endpoints need more conservative load than reads.
+    - name: "Warm-up"
+      duration: 15
+      arrivalRate: 2
+
+    - name: "Ramp-up"
+      duration: 30
+      arrivalRate: 2
+      rampTo: 15
+
+    - name: "Sustained load"
+      duration: 60
+      arrivalRate: 15
+
+  plugins:
+    metrics-by-endpoint: {}
+
+scenarios:
+  # ============================================================================
+  # SCENARIO 1 — Book a new appointment
+  # Tests the full booking flow: slot availability check + appointment creation.
+  # ============================================================================
+  - name: "Book a channeling appointment"
+    weight: 2
+    flow:
+      # POST /api/appointments
+      - post:
+          url: "/api/appointments"
+          json:
+            userId: "{{ userId }}"
+            doctorId: "{{ doctorId }}"
+            slotId: "{{ slotId }}"
+            # Add any other fields your bookingController.create() expects
+            notes: "Performance test booking"
+          # 201 = Created, 409 = slot already taken (also valid under concurrency)
+          expect:
+            - statusCode:
+                - 201
+                - 409
+
+  # ============================================================================
+  # SCENARIO 2 — List appointments for a user
+  # Simulates a patient checking their appointment history.
+  # This is a high-frequency read — give it the highest weight.
+  # ============================================================================
+  - name: "List appointments for a patient"
+    weight: 5
+    flow:
+      # GET /api/appointments/user/:userId
+      - get:
+          url: "/api/appointments/user/{{ userId }}"
+          expect:
+            - statusCode: 200
+
+  # ============================================================================
+  # SCENARIO 3 — Cancel an appointment
+  # DELETE is usually low-frequency; keep its weight low.
+  # ============================================================================
+  - name: "Cancel an appointment"
+    weight: 1
+    flow:
+      # DELETE /api/appointments/:id/cancel
+      - delete:
+          url: "/api/appointments/{{ appointmentId }}/cancel"
+          # 200 = cancelled, 404 = already gone (both acceptable in load tests)
+          expect:
+            - statusCode:
+                - 200
+                - 404
