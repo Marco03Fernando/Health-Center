@@ -20,7 +20,7 @@ app.use(
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  res.send("API is running...");
+  res.send("Diagnostic Booking API running 🚀");
 });
 
 app.use("/api/test-types", require("./src/routes/TestManagement/testTypeRoutes"));
@@ -32,8 +32,11 @@ app.use(appointmentSlotRoutes);
 const appointmentRoutes = require("./src/routes/appointmentRoutes");
 app.use(appointmentRoutes);
 
-const PORT = process.env.PORT || 5000;
+const medicationInventoryRoutes = require("./src/routes/pharmacy/medicationInventoryRoutes");
+app.use("/api/medication-inventory", medicationInventoryRoutes);
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+const pharmacyOrderRoutes = require("./src/routes/pharmacy/pharmacyOrderRoutes");
+app.use("/api/pharmacy-orders", pharmacyOrderRoutes);
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}...`));

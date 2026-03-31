@@ -1,14 +1,14 @@
 const express = require('express');
 const router = express.Router();
+const { bookAppointment, updateAppointment, deleteAppointment, getAllAppointmentsAdmin, getCenterAppointments, getAppointmentById, getUserAppointments } = require('../controllers/appoinment/bookingController');
 
-const {
-  create,       
-  listByUser,   
-  cancel,       
-  pay,          
-  updateStatus,
-  getAllAppointments
-} = require('../controllers/appoinment/appointmentsController');
+router.post('/api/bookappointment', bookAppointment);
+router.get('/api/appointment/:bookingId', getAppointmentById);
+router.get('/api/user-appointments/:userId', getUserAppointments);
+router.put('/api/updateappointment/:bookingId', updateAppointment);
+router.delete('/api/deleteappointment/:bookingId', deleteAppointment);
+router.get('/api/getappointments/:centerId', getCenterAppointments);
+router.get('/api/getallappointments', getAllAppointmentsAdmin);
 
 
 router.post('/api/bookappointment', create);

@@ -1,9 +1,8 @@
 const mongoose = require("mongoose");
-const Booking = require('../../models/Appoinment');
-//const Appointment = require("../../models/doctorChanneling/Booking.model");
-//const Slot = require("../../models/doctorChanneling/slot.model");
-//const Doctor = require("../../models/doctorChanneling/doctor.model");
-//const ApiError = require("../../utils/ApiError");
+const Appointment = require("../../models/doctorChanneling/appointment.model");
+const Slot = require("../../models/doctorChanneling/slot.model");
+const Doctor = require("../../models/doctorChanneling/doctor.model");
+const ApiError = require("../../utils/ApiError");
 
 async function create(req, res, next) {
   const session = await mongoose.startSession();
@@ -62,11 +61,11 @@ async function create(req, res, next) {
         },
       };
 
-      await Booking.create([apptDoc], { session });
+      await Appointment.create([apptDoc], { session });
     });
 
     // Fetch created appointment (optional, keeps your response same shape)
-    const created = await Booking.findOne({ slotId }).lean();
+    const created = await Appointment.findOne({ slotId }).lean();
     return res.status(201).json({ success: true, data: created });
   } catch (err) {
     return next(err);
@@ -84,7 +83,7 @@ async function listByUser(req, res, next) {
       throw new ApiError(400, "Invalid userId");
     }
 
-    const items = await Booking.find({ userId })
+    const items = await Appointment.find({ userId })
       .populate("doctorId", "name specialization clinic fee")
       .populate("centerId", "name district")
       .populate("slotId", "date startTime endTime")
@@ -109,7 +108,7 @@ async function cancel(req, res, next) {
     }
 
     await session.withTransaction(async () => {
-      const appt = await Booking.findOne({ _id: req.params.id, userId }).session(session);
+      const appt = await Appointment.findOne({ _id: req.params.id, userId }).session(session);
       if (!appt) throw new ApiError(404, "Appointment not found");
 
       if (["completed", "no_show"].includes((appt.status || '').toLowerCase())) {
@@ -132,7 +131,7 @@ async function cancel(req, res, next) {
       }
     });
 
-    const updated = await Booking.findById(req.params.id).lean();
+    const updated = await Appointment.findById(req.params.id).lean();
     return res.json({ success: true, data: updated });
   } catch (err) {
     next(err);
@@ -144,7 +143,7 @@ async function cancel(req, res, next) {
 async function pay(req, res, next) {
   try {
     const { method } = req.body;
-    const appt = await Booking.findById(req.params.id);
+    const appt = await Appointment.findById(req.params.id);
     if (!appt) throw new ApiError(404, "Appointment not found");
 
     if (appt.status === "cancelled") throw new ApiError(400, "Cannot pay for a cancelled appointment");
@@ -171,70 +170,9 @@ async function pay(req, res, next) {
   }
 }
 
-async function getAllAppointments(req, res, next) {
-  try {
-    const items = await Booking.find().sort({ createdAt: -1 });
-
-    res.json({ success: true, data: items });
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function updateStatus(req, res, next) {
-  try {
-    const { status } = req.body;
-
-    const allowedStatuses = ["PENDING", "UNDERGOING", "RESULT_PENDING", "COMPLETED", "CANCELLED", "CONFIRMED"];
-
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid status",
-      });
-    }
-
-    const appt = await Booking.findById(req.params.id);
-
-    if (!appt) {
-      return res.status(404).json({
-        success: false,
-        message: "Appointment not found",
-      });
-    }
-
-    // 🔥 Update the correct field
-    appt.appointmentStatus = status;
-    appt.statusUpdatedAt = new Date();
-
-    await appt.save();
-
-    res.json({ success: true, data: appt });
-  } catch (err) {
-    next(err);
-  }
-}
-
-/*async function getAllAppointments(req, res, next) {
-  try {
-    const items = await Booking.find()
-      .populate("user") // optional
-      .populate("slot") // this exists
-      .populate("diagnosticTest") // this exists
-      .populate("healthCenter") // this exists
-      .sort({ createdAt: -1 });
-
-    res.json({ success: true, data: items });
-  } catch (err) {
-    next(err);
-  }
-}*/
-
 module.exports = {
   create,
   listByUser,
   cancel,
   pay,
-  updateStatus,
-  getAllAppointments
 };

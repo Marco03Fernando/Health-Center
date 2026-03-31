@@ -4,7 +4,7 @@ const BookingSchema = new mongoose.Schema(
   {
     user: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref: 'users',
       required: true
     },
     slot: {
@@ -14,12 +14,12 @@ const BookingSchema = new mongoose.Schema(
     },
     diagnosticTest: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'DiagnosticTest',
+      ref: 'testType',
       required: true
     },
     healthCenter: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'HealthCenter',
+      ref: 'centers',
       required: true
     },
     appointmentDate: {
@@ -37,4 +37,4 @@ const BookingSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model('Booking', BookingSchema);
+module.exports = mongoose.model('bookings', BookingSchema);
