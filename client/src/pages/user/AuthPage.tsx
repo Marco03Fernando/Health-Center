@@ -29,7 +29,9 @@ const AuthPage = () => {
         try {
           const adminData = await adminLogin(email, password);
           if (adminData?.admin || adminData?.token) {
-            navigate('/admin/dashboard');
+            const role = adminData?.admin?.role;
+            if (role === "superadmin") navigate("/admin/dashboard");
+            else navigate("/center-admin"); // "admin" role → center admin portal
             return;
           }
         } catch {

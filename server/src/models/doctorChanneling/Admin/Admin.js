@@ -7,6 +7,7 @@ const adminSchema = new mongoose.Schema(
     email: { type: String, required: true, trim: true, lowercase: true, unique: true },
     password: { type: String, required: true, minlength: 6, select: false },
     role: { type: String, enum: ["admin", "superadmin"], default: "admin" },
+    centerId: { type: mongoose.Schema.Types.ObjectId, ref: "centers", default: null },
     isActive: { type: Boolean, default: true, index: true },
   },
   { timestamps: true }

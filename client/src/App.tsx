@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import AdminRoutes from "@/routes/AdminRoutes";
+import CenterAdminRoutes from "@/routes/CenterAdminRoutes";
 import DoctorRoutes from "@/routes/DoctorRoutes";
 import UserRoutes from "@/routes/UserRoutes";
 import NotFound from "@/pages/NotFound";
@@ -22,9 +23,10 @@ const App = () => (
           <Route path="/" element={<Navigate to="/user" replace />} />
 
           {/* Role-based portals */}
-          <Route path="/admin/*"  element={<AdminRoutes />} />
-          <Route path="/doctor/*" element={<DoctorRoutes />} />
-          <Route path="/user/*"   element={<UserRoutes />} />
+          <Route path="/admin/*"         element={<AdminRoutes />} />
+          <Route path="/center-admin/*"  element={<CenterAdminRoutes />} />
+          <Route path="/doctor/*"        element={<DoctorRoutes />} />
+          <Route path="/user/*"          element={<UserRoutes />} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>
