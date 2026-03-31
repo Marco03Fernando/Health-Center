@@ -1,4 +1,6 @@
+const mongoose = require("mongoose");
 const TestResult = require("../../models/TestManagement/TestResult");
+require("../../models/Appoinment"); 
 
 // Create new test result
 exports.createTestResult = async (req, res) => {
@@ -16,8 +18,8 @@ exports.getAllTestResults = async (req, res) => {
     const results = await TestResult.find()
       .populate("appointmentId")
       .populate("testTypeId")
-      .populate("patientId")
-      .populate("doctorId");
+      //.populate("patientId")
+      //.populate("doctorId");
     res.status(200).json({ success: true, data: results });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
@@ -28,10 +30,10 @@ exports.getAllTestResults = async (req, res) => {
 exports.getTestResultById = async (req, res) => {
   try {
     const result = await TestResult.findById(req.params.id)
-      .populate("appointmentId")
+      //.populate("appointmentId")
       .populate("testTypeId")
-      .populate("patientId")
-      .populate("doctorId");
+      //.populate("patientId")
+      //.populate("doctorId");
 
     if (!result) return res.status(404).json({ success: false, error: "Not found" });
 
@@ -46,17 +48,15 @@ exports.getTestResultsByPatientId = async (req, res) => {
   try {
     const { patientId } = req.params;
 
-    // Validate patientId
     if (!patientId || !mongoose.Types.ObjectId.isValid(patientId)) {
       return res.status(400).json({ success: false, error: "Invalid patient ID" });
     }
 
-    // Fetch test results filtered by patientId
     const results = await TestResult.find({ patientId })
-      .populate("testTypeId")   // optional, will show test type details
-      .populate("doctorId");    // optional, will show doctor details if model exists
+      .populate("testTypeId");
 
     res.status(200).json({ success: true, data: results });
+
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

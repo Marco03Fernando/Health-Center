@@ -1,6 +1,5 @@
 const TestType = require("../../models/TestManagement/TestType");
 
-// Create Test Type
 exports.createTestType = async (req, res) => {
   try {
     const {
@@ -21,10 +20,10 @@ exports.createTestType = async (req, res) => {
       description,
       category,
       price,
-      sampleTypes,      // ✅ required
+      sampleTypes,      
       instructions,
       parameters,
-      availableDoctors: availableDoctors || [], // optional, default empty
+      availableDoctors: availableDoctors || [], 
     });
 
     res.status(201).json(testType);

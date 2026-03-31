@@ -12,7 +12,7 @@ const testResultSchema = new mongoose.Schema(
   {
     appointmentId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Appointment",
+      ref: "Booking",
       required: true,
     },
 
@@ -24,8 +24,7 @@ const testResultSchema = new mongoose.Schema(
 
     patientId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Patient",
-      required: true,
+      ref: "User"
     },
 
     doctorId: {
@@ -41,7 +40,7 @@ const testResultSchema = new mongoose.Schema(
 
     condition: {
       type: String,
-      enum: ["normal", "severe"],
+      enum: ["normal", "severe", "unknown"],
     },
 
     results: {
