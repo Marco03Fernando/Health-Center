@@ -1,6 +1,6 @@
 import { labTechApiFetch as apiFetch } from "@/lib/api";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types (optional, keep if using TS) ───────────────────────────────────────
 
 export type DiagnosticTest = {
   _id: string;
@@ -31,75 +31,15 @@ export type TestType = {
   }[];
 };
 
-export type BookingStatus = "CONFIRMED" | "COMPLETED" | "CANCELLED";
+// ─── Diagnostic Tests (KEEP - but NOT for TestTypesPage) ──────────────────────
 
-export type LabBooking = {
-  _id: string;
-  appointmentStatus: BookingStatus;
-  appointmentDate?: string;
-  diagnosticTest?: {
-    _id?: string;
-    name?: string;
-    description?: string;
-    instructions?: string;
-  } | null;
-  healthCenter?: {
-    _id?: string;
-    name?: string;
-    address?: string;
-    phone?: string;
-  } | null;
-  slot?: {
-    _id?: string;
-    slotDate?: string;
-    startTime?: string;
-    endTime?: string;
-  } | null;
-  user?: {
-    _id?: string;
-    fullName?: string;
-    name?: string;
-    email?: string;
-    phone?: string;
-  } | null;
-};
-
-export type TestResult = {
-  _id: string;
-  appointmentId: string;
-  testTypeId: string | TestType;
-  patientId?: string;
-  doctorId?: string;
-  status: "pending" | "undergoing" | "completed";
-  condition?: "normal" | "severe" | "unknown";
-  results: {
-    name: string;
-    value: number;
-    unit: string;
-    normalMinValue?: number;
-    normalMaxValue?: number;
-  }[];
-  notes?: string;
-  recommendConsultation?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-// ─── Diagnostic Tests ─────────────────────────────────────────────────────────
-
-export async function getDiagnosticTests(centerId?: string): Promise<DiagnosticTest[]> {
+export async function getDiagnosticTests(centerId) {
   const qs = centerId ? `?centerId=${encodeURIComponent(centerId)}` : "";
   const res = await apiFetch(`/lab/diagnostic-tests${qs}`);
   return res?.data || (Array.isArray(res) ? res : []);
 }
 
-export async function createDiagnosticTest(data: {
-  name: string;
-  description?: string;
-  instructions: string;
-  isActive?: boolean;
-  centerId?: string;
-}): Promise<DiagnosticTest> {
+export async function createDiagnosticTest(data) {
   const res = await apiFetch("/lab/diagnostic-tests", {
     method: "POST",
     body: JSON.stringify(data),
@@ -107,10 +47,7 @@ export async function createDiagnosticTest(data: {
   return res?.data || res;
 }
 
-export async function updateDiagnosticTest(
-  id: string,
-  data: Partial<{ name: string; description: string; instructions: string; isActive: boolean }>
-): Promise<DiagnosticTest> {
+export async function updateDiagnosticTest(id, data) {
   const res = await apiFetch(`/lab/diagnostic-tests/${id}`, {
     method: "PUT",
     body: JSON.stringify(data),
@@ -118,39 +55,65 @@ export async function updateDiagnosticTest(
   return res?.data || res;
 }
 
-export async function deleteDiagnosticTest(id: string): Promise<void> {
-  await apiFetch(`/lab/diagnostic-tests/${id}`, { method: "DELETE" });
+export async function deleteDiagnosticTest(id) {
+  await apiFetch(`/lab/diagnostic-tests/${id}`, {
+    method: "DELETE",
+  });
 }
 
-// ─── Test Types (for result entry parameters) ─────────────────────────────────
+// ─── ✅ Test Types (MAIN FIXED PART) ──────────────────────────────────────────
 
-export async function getTestTypes(centerId?: string): Promise<TestType[]> {
+// GET ALL (ACTIVE + INACTIVE)
+export async function getTestTypes(centerId) {
   const qs = centerId ? `?centerId=${encodeURIComponent(centerId)}` : "";
   const res = await apiFetch(`/test-types${qs}`);
   return Array.isArray(res) ? res : res?.data || [];
 }
 
-export async function getTestTypeById(id: string): Promise<TestType> {
+// GET SINGLE
+export async function getTestTypeById(id) {
   const res = await apiFetch(`/test-types/${id}`);
   return res?.data || res;
 }
 
+// CREATE
+export async function createTestType(data) {
+  const res = await apiFetch("/test-types", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  return res?.data || res;
+}
+
+// UPDATE
+export async function updateTestType(id, data) {
+  const res = await apiFetch(`/test-types/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+  return res?.data || res;
+}
+
+// ✅ DELETE (REAL DELETE)
+export async function deleteTestType(id) {
+  await apiFetch(`/test-types/${id}`, {
+    method: "DELETE",
+  });
+}
+
 // ─── Lab Bookings ─────────────────────────────────────────────────────────────
 
-export async function getLabBookings(centerId: string): Promise<LabBooking[]> {
+export async function getLabBookings(centerId) {
   const res = await apiFetch(`/getappointments/${centerId}`);
   return res?.data || res?.appointments || (Array.isArray(res) ? res : []);
 }
 
-export async function getBookingById(bookingId: string): Promise<LabBooking> {
+export async function getBookingById(bookingId) {
   const res = await apiFetch(`/appointment/${bookingId}`);
   return res?.data || res;
 }
 
-export async function updateBookingStatus(
-  bookingId: string,
-  status: BookingStatus
-): Promise<void> {
+export async function updateBookingStatus(bookingId, status) {
   await apiFetch(`/updateappointment/${bookingId}`, {
     method: "PUT",
     body: JSON.stringify({ status }),
@@ -159,22 +122,13 @@ export async function updateBookingStatus(
 
 // ─── Test Results ─────────────────────────────────────────────────────────────
 
-export async function getTestResults(centerId?: string): Promise<TestResult[]> {
+export async function getTestResults(centerId) {
   const qs = centerId ? `?centerId=${encodeURIComponent(centerId)}` : "";
   const res = await apiFetch(`/test-results${qs}`);
   return res?.data || (Array.isArray(res) ? res : []);
 }
 
-export async function createTestResult(data: {
-  appointmentId: string;
-  testTypeId: string;
-  patientId?: string;
-  status?: string;
-  condition?: string;
-  results: { name: string; value: number; unit: string; normalMinValue?: number; normalMaxValue?: number }[];
-  notes?: string;
-  recommendConsultation?: boolean;
-}): Promise<TestResult> {
+export async function createTestResult(data) {
   const res = await apiFetch("/test-results", {
     method: "POST",
     body: JSON.stringify(data),
@@ -182,10 +136,7 @@ export async function createTestResult(data: {
   return res?.data || res;
 }
 
-export async function updateTestResult(
-  id: string,
-  data: Partial<TestResult>
-): Promise<TestResult> {
+export async function updateTestResult(id, data) {
   const res = await apiFetch(`/test-results/${id}`, {
     method: "PUT",
     body: JSON.stringify(data),
