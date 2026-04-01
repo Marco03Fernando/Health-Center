@@ -329,7 +329,7 @@ async function getAppointmentById(req, res) {
     const booking = await Booking.findById(bookingId)
       .populate('user', 'name email phone')
       .populate('healthCenter', 'name address phone')
-      .populate('diagnosticTest', 'name description preparationInstructions')
+      .populate('diagnosticTest', 'name description instructions')
       .populate('slot', 'slotDate startTime endTime status');
 
     if (!booking) {
@@ -388,7 +388,7 @@ async function getUserAppointments(req, res) {
 
     const appointments = await Booking.find(filter)
       .populate('healthCenter', 'name address phone')
-      .populate('diagnosticTest', 'name description preparationInstructions')
+      .populate('diagnosticTest', 'name description instructions')
       .populate('slot', 'slotDate startTime endTime status')
       .sort({ appointmentDate: -1 });
 
