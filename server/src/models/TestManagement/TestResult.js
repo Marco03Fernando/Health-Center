@@ -12,13 +12,13 @@ const testResultSchema = new mongoose.Schema(
   {
     appointmentId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Booking",
+      ref: "bookings",
       required: true,
     },
 
     testTypeId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "TestType",
+      ref: "testType",
       required: true,
     },
 

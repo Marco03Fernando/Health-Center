@@ -26,7 +26,7 @@ describe('DiagnosticTest controller', () => {
 
   it('createTest returns 201 on success', async () => {
     DiagnosticTest.create.mockResolvedValue({ _id: '2', name: 'B' });
-    const req = { body: { name: 'B', preparationInstructions: 'prep' } };
+    const req = { body: { name: 'B', instructions: 'prep' } };
     const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
     await createTest(req, res, jest.fn());
     expect(res.status).toHaveBeenCalledWith(201);
@@ -34,7 +34,7 @@ describe('DiagnosticTest controller', () => {
   });
 
   it('createTest calls next when missing required fields', async () => {
-    const req = { body: { name: 'X' } }; // missing preparationInstructions
+    const req = { body: { name: 'X' } }; // missing instructions
     const next = jest.fn();
     await createTest(req, {}, next);
     expect(next).toHaveBeenCalled();

@@ -27,7 +27,7 @@ describe('diagnosticTest routes', () => {
   });
 
   it('POST /api/diagnostic-tests responds 201 when creating', async () => {
-    const payload = { name: 'X', preparationInstructions: 'p' };
+    const payload = { name: 'X', instructions: 'p' };
     const res = await request(app).post('/api/diagnostic-tests').send(payload);
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);

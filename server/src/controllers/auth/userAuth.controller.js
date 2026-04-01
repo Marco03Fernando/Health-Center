@@ -56,12 +56,13 @@ async function registerPatient(req, res) {
 async function loginUser(req, res) {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = String(email || "").trim().toLowerCase();
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return res.status(400).json({ message: "email and password are required" });
     }
 
-    const user = await User.findOne({ email }).select("+password");
+    const user = await User.findOne({ email: normalizedEmail }).select("+password");
     if (!user || !user.isActive) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
