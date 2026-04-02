@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createDiagnosticTest } from "@/services/lab-tech.service";
+import { createTestType } from "@/services/lab-tech.service";
 import { useLabTech } from "@/contexts/LabTechContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,11 +48,11 @@ export default function AddTestPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Basic validations
     if (!name.trim() || !instructions.trim()) {
       setError("Test name and preparation instructions are required.");
       return;
     }
-
     if (!parameters.length || !parameters.some(p => p.name.trim())) {
       setError("At least one parameter with a name is required.");
       return;
@@ -61,8 +61,10 @@ export default function AddTestPage() {
     try {
       setSubmitting(true);
       setError("");
-      await createDiagnosticTest({
-        testCode: testCode.trim() || undefined,
+
+      // Send the raw object
+      await createTestType ({
+        testCode: testCode.trim().toUpperCase(), // match your schema uppercase
         name: name.trim(),
         description: description.trim() || undefined,
         category: category.trim() || undefined,
@@ -74,13 +76,16 @@ export default function AddTestPage() {
           name: p.name.trim(),
           unit: p.unit.trim(),
           normalMinValue: Number(p.normalMinValue) || 0,
-          normalMaxValue: Number(p.normalMaxValue) || 0
+          normalMaxValue: Number(p.normalMaxValue) || 0,
         })),
         centerId: centerId || undefined,
       });
+
       setSuccess(true);
       setTimeout(() => navigate("/lab-tech/test-types"), 1500);
+
     } catch (err) {
+      console.error("Error creating test:", err);
       setError(err?.message || "Failed to create diagnostic test.");
     } finally {
       setSubmitting(false);
@@ -129,7 +134,7 @@ export default function AddTestPage() {
                 <Label htmlFor="testCode">Test Code</Label>
                 <Input
                   id="testCode"
-                  placeholder="e.g. DT-WZMFXX"
+                  placeholder="e.g. LPT001"
                   value={testCode}
                   onChange={(e) => setTestCode(e.target.value)}
                   className="h-11 rounded-xl"
@@ -141,7 +146,7 @@ export default function AddTestPage() {
                 </Label>
                 <Input
                   id="name"
-                  placeholder="e.g. Lipid Profile"
+                  placeholder="e.g. Lipid Profile Test"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required

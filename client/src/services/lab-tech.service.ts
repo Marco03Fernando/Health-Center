@@ -1,6 +1,5 @@
 import { labTechApiFetch as apiFetch } from "@/lib/api";
 
-// ─── Types (optional, keep if using TS) ───────────────────────────────────────
 
 export type DiagnosticTest = {
   _id: string;
@@ -31,7 +30,7 @@ export type TestType = {
   }[];
 };
 
-// ─── Diagnostic Tests (KEEP - but NOT for TestTypesPage) ──────────────────────
+// ─── Diagnostic Tests
 
 export async function getDiagnosticTests(centerId) {
   const qs = centerId ? `?centerId=${encodeURIComponent(centerId)}` : "";
@@ -39,11 +38,17 @@ export async function getDiagnosticTests(centerId) {
   return res?.data || (Array.isArray(res) ? res : []);
 }
 
-export async function createDiagnosticTest(data) {
+export async function createDiagnosticTest(data: any) {
+  const isFormData = data instanceof FormData;
+
   const res = await apiFetch("/lab/diagnostic-tests", {
     method: "POST",
-    body: JSON.stringify(data),
+    body: isFormData ? data : JSON.stringify(data),
+    headers: isFormData
+      ? undefined // Let browser set multipart headers automatically
+      : { "Content-Type": "application/json" },
   });
+
   return res?.data || res;
 }
 
@@ -61,7 +66,7 @@ export async function deleteDiagnosticTest(id) {
   });
 }
 
-// ─── ✅ Test Types (MAIN FIXED PART) ──────────────────────────────────────────
+// Test Types 
 
 // GET ALL (ACTIVE + INACTIVE)
 export async function getTestTypes(centerId) {
@@ -94,7 +99,7 @@ export async function updateTestType(id, data) {
   return res?.data || res;
 }
 
-// ✅ DELETE (REAL DELETE)
+// DELETE 
 export async function deleteTestType(id) {
   await apiFetch(`/test-types/${id}`, {
     method: "DELETE",
@@ -142,4 +147,12 @@ export async function updateTestResult(id, data) {
     body: JSON.stringify(data),
   });
   return res?.data || res;
+}
+
+// ─── Lab Bookings ─────────────────────────────────────────────────────────────
+
+// GET ALL BOOKINGS
+export async function getAllLabBookings() {
+  const res = await apiFetch(`/getallappointments`);
+  return res?.data || (Array.isArray(res) ? res : []);
 }

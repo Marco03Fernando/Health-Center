@@ -1,27 +1,29 @@
 const mongoose = require('mongoose');
 
-// Sub-schema for individual measurable parameters (used in result entry)
+// Sub-schema for individual measurable parameters
 const parameterSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  unit: { type: String, required: true },
+  name: { type: String, required: true, trim: true },
+  unit: { type: String, required: true, trim: true },
   normalMinValue: { type: Number, required: true },
   normalMaxValue: { type: Number, required: true },
 });
 
 const DiagnosticTestSchema = new mongoose.Schema(
   {
-    // Core identity — auto-generated on creation (DT-XXXXXX)
+    
     testCode: {
       type: String,
-      trim: true,
+      required: [true, 'Test code is required'],
       unique: true,
-      sparse: true, // null values are excluded from the unique index
+      trim: true,
+      uppercase: true, // keeps codes consistent like DT-ABC123
     },
 
     name: {
       type: String,
       trim: true,
       required: [true, 'Diagnostic test name is required'],
+      unique: true, // prevent duplicate names 
     },
 
     description: {
@@ -38,10 +40,11 @@ const DiagnosticTestSchema = new mongoose.Schema(
     // Booking / display info
     price: {
       type: Number,
+      min: 0,
     },
 
     sampleTypes: {
-      type: String, // e.g. Blood / Urine / Stool
+      type: String,
       trim: true,
     },
 
@@ -51,14 +54,14 @@ const DiagnosticTestSchema = new mongoose.Schema(
       default: '',
     },
 
-    // Health center this test belongs to (center-specific filtering)
+    // Health center this test belongs to
     centerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'centers',
       default: null,
     },
 
-    // Measurable parameters for result entry
+    // Measurable parameters
     parameters: {
       type: [parameterSchema],
       default: [],
@@ -82,35 +85,7 @@ const DiagnosticTestSchema = new mongoose.Schema(
   }
 );
 
-// ── Auto-generate testCode before saving ────────────────────────────────────
-function generateCode() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = 'DT-';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
-
-DiagnosticTestSchema.pre('save', async function () {
-  if (this.testCode) return; // already set — keep it
-
-  // Retry until we find a code not already in use
-  const maxAttempts = 10;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const candidate = generateCode();
-    // eslint-disable-next-line no-await-in-loop
-    const exists = await mongoose.model('testType').findOne({ testCode: candidate }).lean();
-    if (!exists) {
-      this.testCode = candidate;
-      return;
-    }
-  }
-
-  throw new Error('Failed to generate a unique test code — please try again');
-});
-
-// Re-use existing collection name so no data migration is required
+// Use same collection (no change)
 const DiagnosticTest = mongoose.model('testType', DiagnosticTestSchema);
 
 module.exports = DiagnosticTest;
