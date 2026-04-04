@@ -34,6 +34,8 @@ const prescriptionRoutes = require("./routes/doctorChanneling/prescription.route
 const adminDoctorRoutes = require("./routes/doctorChanneling/admin/adminDoctor.routes");
 const adminAuthRoutes = require("./routes/auth/adminAuth.routes");
 const userAuthRoutes = require("./routes/auth/userAuth.routes");
+const medicationInventoryRoutes = require("./routes/pharmacy/medicationInventoryRoutes");
+const pharmacyOrderRoutes = require("./routes/pharmacy/pharmacyOrderRoutes");
 
 // Lab booking routes (diagnostic tests, appointment slots, bookings)
 const diagnosticTestRoutes = require("./routes/diagnosticTest.routes");
@@ -400,6 +402,8 @@ app.use("/api/prescriptions", prescriptionRoutes);
 app.use("/api/admin/doctors", adminDoctorRoutes);
 app.use("/api/admin/auth", adminAuthRoutes);
 app.use("/api/auth", userAuthRoutes);
+app.use("/api/medication-inventory", medicationInventoryRoutes);
+app.use("/api/pharmacy-orders", pharmacyOrderRoutes);
 
 // Lab booking routes
 app.use("/api/lab/diagnostic-tests", diagnosticTestRoutes);
