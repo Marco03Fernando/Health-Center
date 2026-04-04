@@ -1,4 +1,5 @@
 const Admin = require("../../models/doctorChanneling/Admin/Admin");
+require("../../models/HealthCenter"); // ensure 'centers' model is registered for populate
 const generateToken = require("../../utils/generateToken");
 
 // Register first admin manually / via Postman
@@ -10,14 +11,15 @@ async function registerAdmin(req, res) {
       return res.status(400).json({ message: "name, email and password are required" });
     }
 
-    const existing = await Admin.findOne({ email });
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const existing = await Admin.findOne({ email: normalizedEmail });
     if (existing) {
       return res.status(400).json({ message: "Admin already exists" });
     }
 
     const admin = await Admin.create({
       name,
-      email,
+      email: normalizedEmail,
       password,
       role: role || "superadmin",
     });
@@ -44,7 +46,10 @@ async function loginAdmin(req, res) {
       return res.status(400).json({ message: "email and password are required" });
     }
 
-    const admin = await Admin.findOne({ email }).select("+password");
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const admin = await Admin.findOne({ email: normalizedEmail })
+      .select("+password")
+      .populate("centerId", "_id name address district openingTime closingTime");
     if (!admin || !admin.isActive) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
@@ -77,6 +82,12 @@ async function loginAdmin(req, res) {
           name: admin.name,
           email: admin.email,
           role: admin.role,
+          centerId: admin.centerId?._id || admin.centerId || null,
+          centerName: admin.centerId?.name || null,
+          centerAddress: admin.centerId?.address || null,
+          centerDistrict: admin.centerId?.district || null,
+          centerOpeningTime: admin.centerId?.openingTime || null,
+          centerClosingTime: admin.centerId?.closingTime || null,
         },
         token,
       });
@@ -88,7 +99,8 @@ async function loginAdmin(req, res) {
 
 async function getAdminMe(req, res) {
   try {
-    const admin = req.admin;
+    const admin = await Admin.findById(req.admin._id).populate("centerId", "_id name address district openingTime closingTime");
+    if (!admin) return res.status(404).json({ message: "Admin not found" });
 
     return res.json({
       admin: {
@@ -96,6 +108,12 @@ async function getAdminMe(req, res) {
         name: admin.name,
         email: admin.email,
         role: admin.role,
+        centerId: admin.centerId?._id || admin.centerId || null,
+        centerName: admin.centerId?.name || null,
+        centerAddress: admin.centerId?.address || null,
+        centerDistrict: admin.centerId?.district || null,
+        centerOpeningTime: admin.centerId?.openingTime || null,
+        centerClosingTime: admin.centerId?.closingTime || null,
       },
     });
   } catch (err) {

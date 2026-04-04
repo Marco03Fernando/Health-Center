@@ -1,0 +1,1685 @@
+{
+  "info": {
+    "_postman_id": "hc-collection-2026",
+    "name": "Health Center API",
+    "description": "Complete API collection for the Health Center server application.\n\nThis collection covers all available REST API endpoints organized by feature module:\n- **Auth** – Patient and Admin authentication\n- **Centers** – Health center management\n- **Doctors** – Doctor profiles and availability\n- **Slots** – Doctor appointment slot browsing\n- **Doctor Appointments** – Channeling appointment booking and management\n- **Prescriptions** – Doctor-issued prescriptions and pharmacy dispensing\n- **Admin – Doctor Management** – Admin CRUD and slot control for doctors\n- **Lab – Diagnostic Tests** – Catalogue of lab/diagnostic tests\n- **Lab – Appointment Slots** – Lab slot generation and retrieval\n- **Lab – Bookings** – Lab appointment booking management\n- **Test Types** – Test type definitions (alias of Diagnostic Tests)\n- **Test Results** – Patient lab result entry and retrieval\n- **Pharmacy – Medication Inventory** – Medicine stock and batch management\n- **Pharmacy – Orders** – Pharmacy order processing\n\n**Base URL:** `{{base_url}}` (default: http://localhost:8081)\n\n**Authentication:** Most protected routes expect a JWT Bearer token in the `Authorization` header. Admin routes additionally require the `admin` or `superadmin` role.\n\n**Session-based routes** (Doctor routes `/api/doctors/me`, `/api/appointments/doctor/me`) use a session cookie set after the doctor logs in via `/api/auth/login`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8081",
+      "type": "string",
+      "description": "Base URL of the Health Center API server"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "JWT Bearer token obtained from login endpoints. Set this after logging in."
+    },
+    {
+      "key": "admin_token",
+      "value": "",
+      "type": "string",
+      "description": "JWT Bearer token for admin/superadmin. Set this after admin login."
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth – User / Patient",
+      "description": "Handles patient registration, login, profile retrieval, profile updates, password change, and logout.\n\nAll protected routes require a `Authorization: Bearer {{token}}` header with a valid JWT token obtained from the login endpoint.",
+      "item": [
+        {
+          "name": "Register Patient",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "register"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Jane Doe\",\n  \"phone\": \"+94771234567\",\n  \"email\": \"jane.doe@example.com\",\n  \"password\": \"SecurePass123\"\n}"
+            },
+            "description": "Creates a new patient account.\n\nAll four fields are required. Returns a JWT token and the created user object on success. Returns 400 if the email is already registered."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"message\": \"Patient registered successfully\",\n  \"user\": {\n    \"id\": \"664abc123def456\",\n    \"fullName\": \"Jane Doe\",\n    \"phone\": \"+94771234567\",\n    \"email\": \"jane.doe@example.com\",\n    \"role\": \"patient\",\n    \"mustChangePassword\": false\n  },\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Login (Patient / Doctor / Pharmacy)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jane.doe@example.com\",\n  \"password\": \"SecurePass123\"\n}"
+            },
+            "description": "Authenticates a user (patient, doctor, receptionist, or pharmacy staff) and returns a JWT token.\n\nStore the returned `token` in the `{{token}}` collection variable for use in protected requests. For doctor logins the server also sets a session cookie."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Login successful\",\n  \"user\": {\n    \"id\": \"664abc123def456\",\n    \"fullName\": \"Jane Doe\",\n    \"email\": \"jane.doe@example.com\",\n    \"role\": \"patient\"\n  },\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "logout"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Invalidates the current user session and/or JWT. Call this to log out a user. No request body is required."
+          }
+        },
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "me"]
+            },
+            "description": "Returns the authenticated patient's profile information. Requires a valid JWT Bearer token.\n\nReturns the user object including fullName, phone, email, and role."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"id\": \"664abc123def456\",\n  \"fullName\": \"Jane Doe\",\n  \"phone\": \"+94771234567\",\n  \"email\": \"jane.doe@example.com\",\n  \"role\": \"patient\",\n  \"isActive\": true\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "me"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Jane Updated\",\n  \"phone\": \"+94779876543\"\n}"
+            },
+            "description": "Updates the authenticated patient's profile fields. Only include fields you want to change. Requires a valid JWT Bearer token."
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/change-password",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "change-password"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"SecurePass123\",\n  \"newPassword\": \"NewSecurePass456\"\n}"
+            },
+            "description": "Changes the authenticated user's password. Both `currentPassword` and `newPassword` are required. Returns 400 if the current password is incorrect."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth – Admin",
+      "description": "Handles admin account registration, login, and profile retrieval.\n\nAdmin accounts support multiple roles: `admin`, `superadmin`, `lab-tech`, and `center-admin`. Protected routes require `Authorization: Bearer {{admin_token}}`. Only `admin` or `superadmin` can register new admins.",
+      "item": [
+        {
+          "name": "Register Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "auth", "register"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Super Admin\",\n  \"email\": \"superadmin@healthcenter.lk\",\n  \"password\": \"Admin@1234\",\n  \"role\": \"superadmin\"\n}"
+            },
+            "description": "Creates a new admin account. The `role` field is optional and defaults to `superadmin`. Valid roles: `admin`, `superadmin`, `lab-tech`, `center-admin`.\n\nThis is typically used to bootstrap the first admin account manually."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"message\": \"Admin registered successfully\",\n  \"admin\": {\n    \"id\": \"665xyz789abc\",\n    \"name\": \"Super Admin\",\n    \"email\": \"superadmin@healthcenter.lk\",\n    \"role\": \"superadmin\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Admin Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"superadmin@healthcenter.lk\",\n  \"password\": \"Admin@1234\"\n}"
+            },
+            "description": "Authenticates an admin by email and password. Returns a JWT token and admin profile.\n\nStore the `token` value in `{{admin_token}}` for use in admin-protected routes."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Login successful\",\n  \"admin\": {\n    \"id\": \"665xyz789abc\",\n    \"name\": \"Super Admin\",\n    \"email\": \"superadmin@healthcenter.lk\",\n    \"role\": \"superadmin\"\n  },\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Admin Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "auth", "me"]
+            },
+            "description": "Returns the authenticated admin's profile. Accessible by roles: `admin`, `superadmin`, `lab-tech`, `center-admin`."
+          }
+        },
+        {
+          "name": "Health Check – Admin Auth",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/auth/test",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "auth", "test"]
+            },
+            "description": "Simple health-check endpoint for the admin auth route. Returns `{ ok: true }` if the server is running and routes are mounted correctly. No authentication required."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Centers",
+      "description": "Manages health center records. Public endpoints allow visiting users to browse active centers and featured centers. Admin endpoints (requiring `admin` or `superadmin` role) support full CRUD and toggling visibility.\n\nAll admin routes require `Authorization: Bearer {{admin_token}}`.",
+      "item": [
+        {
+          "name": "Get All Active Centers (Public)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/centers",
+              "host": ["{{base_url}}"],
+              "path": ["api", "centers"]
+            },
+            "description": "Returns all active health centers visible to the public. No authentication required.\n\nEach center includes name, address, district, opening/closing times, and active status."
+          }
+        },
+        {
+          "name": "Get Featured Centers (Public)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/centers/featured",
+              "host": ["{{base_url}}"],
+              "path": ["api", "centers", "featured"]
+            },
+            "description": "Returns health centers marked as featured. Used on the homepage / landing page to highlight key centers. No authentication required."
+          }
+        },
+        {
+          "name": "Get All Centers (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/centers/admin/all",
+              "host": ["{{base_url}}"],
+              "path": ["api", "centers", "admin", "all"]
+            },
+            "description": "Returns all health centers regardless of active or featured status. Intended for admin management views. Requires `admin` or `superadmin` role."
+          }
+        },
+        {
+          "name": "Create Center (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/centers/admin",
+              "host": ["{{base_url}}"],
+              "path": ["api", "centers", "admin"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Colombo Health Center\",\n  \"address\": \"123 Main Street, Colombo 03\",\n  \"district\": \"Colombo\",\n  \"openingTime\": \"08:00\",\n  \"closingTime\": \"18:00\"\n}"
+            },
+            "description": "Creates a new health center. `name`, `openingTime`, and `closingTime` are required. Times must be in `HH:mm` format. Requires `admin` or `superadmin` role."
+          }
+        },
+        {
+          "name": "Update Center (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/centers/admin/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "centers", "admin", ":id"],
+              "variable": [
+                { "key": "id", "value": "664abc123def456", "description": "MongoDB ObjectId of the center" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Colombo Health Center (Updated)\",\n  \"district\": \"Western\",\n  \"openingTime\": \"07:30\",\n  \"closingTime\": \"19:00\"\n}"
+            },
+            "description": "Partially updates fields on a health center. Include only the fields you want to change. Requires `admin` or `superadmin` role."
+          }
+        },
+        {
+          "name": "Toggle Center Active Status (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/centers/admin/:id/active",
+              "host": ["{{base_url}}"],
+              "path": ["api", "centers", "admin", ":id", "active"],
+              "variable": [
+                { "key": "id", "value": "664abc123def456", "description": "MongoDB ObjectId of the center" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "description": "Toggles the `isActive` flag of a health center. Deactivating a center hides it from public listing. Requires `admin` or `superadmin` role."
+          }
+        },
+        {
+          "name": "Toggle Center Featured Status (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/centers/admin/:id/featured",
+              "host": ["{{base_url}}"],
+              "path": ["api", "centers", "admin", ":id", "featured"],
+              "variable": [
+                { "key": "id", "value": "664abc123def456", "description": "MongoDB ObjectId of the center" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "description": "Toggles the `isFeatured` flag of a health center. Featured centers appear in the `/api/centers/featured` public listing. Requires `admin` or `superadmin` role."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Doctors",
+      "description": "Provides public access to doctor listings and detail pages, and allows logged-in doctors to view and update their own profiles.\n\nPublic routes require no authentication. Doctor-specific routes (`/me`) are protected by session middleware and require the `doctor` role. Session is established after login via `/api/auth/login`.",
+      "item": [
+        {
+          "name": "List All Doctors (Public)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/doctors",
+              "host": ["{{base_url}}"],
+              "path": ["api", "doctors"]
+            },
+            "description": "Returns a list of all active doctors. Can be filtered by specialization, center, or name depending on server implementation. No authentication required."
+          }
+        },
+        {
+          "name": "Get Doctor by ID (Public)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/doctors/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "doctors", ":id"],
+              "variable": [
+                { "key": "id", "value": "664abc123def456", "description": "MongoDB ObjectId of the doctor" }
+              ]
+            },
+            "description": "Returns the full profile of a specific doctor by their MongoDB ObjectId. Includes specialization, clinic, fee, schedule, and center assignment. No authentication required."
+          }
+        },
+        {
+          "name": "Get My Doctor Profile (Doctor Only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/doctors/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "doctors", "me"]
+            },
+            "description": "Returns the authenticated doctor's own profile. Protected by session middleware; the requesting user must have the `doctor` role.\n\nThe session/token is established after the doctor logs in via `/api/auth/login`."
+          }
+        },
+        {
+          "name": "Update My Doctor Profile (Doctor Only)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/doctors/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "doctors", "me"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+94761234567\",\n  \"clinic\": \"Wellness Clinic - Room 3\"\n}"
+            },
+            "description": "Allows a logged-in doctor to update their own profile fields such as phone or clinic name. Requires `doctor` role via session middleware. Only provided fields are updated."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Slots – Doctor Availability",
+      "description": "Provides access to available appointment slots for a specific doctor on a given date.\n\nSlots are auto-generated by the server's rolling slot scheduler based on the doctor's working schedule. This endpoint is public and is used by patients before booking an appointment.",
+      "item": [
+        {
+          "name": "Get Available Slots for a Doctor",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/slots?doctorId=664abc123def456&date=2026-04-15",
+              "host": ["{{base_url}}"],
+              "path": ["api", "slots"],
+              "query": [
+                { "key": "doctorId", "value": "664abc123def456", "description": "MongoDB ObjectId of the doctor (required)" },
+                { "key": "date", "value": "2026-04-15", "description": "Date in YYYY-MM-DD format (required)" }
+              ]
+            },
+            "description": "Returns all unbooked slots for a specific doctor on the given date. Both `doctorId` and `date` query parameters are required.\n\nReturns 400 if either parameter is missing. Results are sorted by `startTime` ascending."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"success\": true,\n  \"data\": [\n    {\n      \"_id\": \"slot001\",\n      \"doctorId\": \"664abc123def456\",\n      \"centerId\": \"center001\",\n      \"date\": \"2026-04-15\",\n      \"startTime\": \"09:00\",\n      \"endTime\": \"09:20\",\n      \"isBooked\": false,\n      \"isActive\": true\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Doctor Appointments (Channeling)",
+      "description": "Manages the full lifecycle of doctor-channeling appointments: booking, viewing, status updates, and cancellation.\n\nPatients can book and cancel appointments. Doctors (protected by session) can view their appointment list and update appointment statuses. Appointments reference a doctor, patient, slot, and center.",
+      "item": [
+        {
+          "name": "Book Appointment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/appointments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointments"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"centerId\": \"664center001\",\n  \"doctorId\": \"664abc123def456\",\n  \"userId\": \"664patient001\",\n  \"slotId\": \"664slot001\",\n  \"note\": \"Please bring previous medical reports.\",\n  \"payment\": {\n    \"method\": \"cash\",\n    \"amount\": 1500,\n    \"currency\": \"LKR\"\n  }\n}"
+            },
+            "description": "Books a doctor appointment for a patient. The slot is immediately marked as booked to prevent double-booking. `centerId`, `doctorId`, `userId`, `slotId`, and `payment.amount` are required.\n\nReturns 400 if the slot is already booked."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"success\": true,\n  \"data\": {\n    \"_id\": \"apptId001\",\n    \"centerId\": \"664center001\",\n    \"doctorId\": \"664abc123def456\",\n    \"userId\": \"664patient001\",\n    \"slotId\": \"664slot001\",\n    \"status\": \"pending\",\n    \"payment\": {\n      \"status\": \"unpaid\",\n      \"method\": \"cash\",\n      \"amount\": 1500,\n      \"currency\": \"LKR\"\n    },\n    \"createdAt\": \"2026-04-01T08:00:00.000Z\"\n  }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Appointments by User (Patient)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/appointments/user/:userId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointments", "user", ":userId"],
+              "variable": [
+                { "key": "userId", "value": "664patient001", "description": "MongoDB ObjectId of the patient" }
+              ]
+            },
+            "description": "Returns all appointments for a specific patient, sorted by most recent first. Pass the patient's MongoDB ObjectId as a path parameter."
+          }
+        },
+        {
+          "name": "Get My Appointments (Doctor)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/appointments/doctor/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointments", "doctor", "me"]
+            },
+            "description": "Returns all appointments assigned to the currently authenticated doctor. Protected by the doctor session middleware. Useful for the doctor's dashboard to see their upcoming and past appointments."
+          }
+        },
+        {
+          "name": "Update Appointment Status (Doctor)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/appointments/:id/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointments", ":id", "status"],
+              "variable": [
+                { "key": "id", "value": "apptId001", "description": "MongoDB ObjectId of the appointment" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"completed\"\n}"
+            },
+            "description": "Allows a doctor to update the status of an appointment. Valid statuses: `pending`, `confirmed`, `completed`, `no_show`, `cancelled`. Protected by doctor session middleware.\n\nOnly the doctor assigned to the appointment can update its status."
+          }
+        },
+        {
+          "name": "Cancel Appointment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/appointments/:id/cancel",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointments", ":id", "cancel"],
+              "variable": [
+                { "key": "id", "value": "apptId001", "description": "MongoDB ObjectId of the appointment" }
+              ]
+            },
+            "description": "Cancels a doctor appointment and releases the associated slot back to available. Can be called by the patient or admin. Returns 404 if the appointment does not exist."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Prescriptions",
+      "description": "Manages doctor-issued prescriptions and pharmacy dispensing. Doctors create prescriptions linked to appointments; patients and pharmacy staff can view and act on them.\n\nAll prescription routes require authentication. Each prescription is linked to a doctor, patient, center, and appointment. A PDF download is available for each prescription.",
+      "item": [
+        {
+          "name": "List Prescriptions (Doctor / Patient / Pharmacy / Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/prescriptions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "prescriptions"]
+            },
+            "description": "Returns prescriptions for the authenticated user. Patients only see their own prescriptions. Doctors see prescriptions they issued. Admins and pharmacy staff see all.\n\nQuery parameters such as `userId`, `doctorId`, or `status` may be supported by the controller."
+          }
+        },
+        {
+          "name": "Get My Prescriptions (Doctor Session)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/prescriptions/doctor/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "prescriptions", "doctor", "me"]
+            },
+            "description": "Returns prescriptions created by the currently authenticated doctor. Protected by the doctor session middleware (separate from JWT). Useful for the doctor's prescription history view."
+          }
+        },
+        {
+          "name": "Create Prescription (Doctor)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/prescriptions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "prescriptions"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"centerId\": \"664center001\",\n  \"doctorId\": \"664abc123def456\",\n  \"userId\": \"664patient001\",\n  \"appointmentId\": \"apptId001\",\n  \"diagnosis\": \"Acute upper respiratory tract infection\",\n  \"notes\": \"Rest and plenty of fluids. Follow up in 5 days.\",\n  \"items\": [\n    { \"medicineName\": \"Paracetamol 500mg\", \"quantity\": 15 },\n    { \"medicineName\": \"Amoxicillin 250mg\", \"quantity\": 10 }\n  ]\n}"
+            },
+            "description": "Creates a new prescription for a patient linked to a completed appointment. Only users with the `doctor` role may create prescriptions. A sequential `prescriptionNo` (e.g. P0001) is auto-generated."
+          }
+        },
+        {
+          "name": "Get Prescription by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/prescriptions/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "prescriptions", ":id"],
+              "variable": [
+                { "key": "id", "value": "prescriptionId001", "description": "MongoDB ObjectId of the prescription" }
+              ]
+            },
+            "description": "Returns the full details of a single prescription including doctor info, patient info, diagnosis, notes, and medication items. Accessible by doctor, patient, pharmacy, admin, and superadmin."
+          }
+        },
+        {
+          "name": "Download Prescription PDF",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/prescriptions/:id/pdf",
+              "host": ["{{base_url}}"],
+              "path": ["api", "prescriptions", ":id", "pdf"],
+              "variable": [
+                { "key": "id", "value": "prescriptionId001", "description": "MongoDB ObjectId of the prescription" }
+              ]
+            },
+            "description": "Streams or downloads a PDF version of the prescription. The response Content-Type is `application/pdf`. Accessible by doctor, patient, pharmacy, admin, and superadmin."
+          }
+        },
+        {
+          "name": "Mark Prescription Dispensed (Pharmacy / Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/prescriptions/:id/dispense",
+              "host": ["{{base_url}}"],
+              "path": ["api", "prescriptions", ":id", "dispense"],
+              "variable": [
+                { "key": "id", "value": "prescriptionId001", "description": "MongoDB ObjectId of the prescription" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dispensedBy\": \"Pharmacist Nalini\",\n  \"remarks\": \"All medications dispensed as prescribed.\"\n}"
+            },
+            "description": "Updates the prescription status to `dispensed` and records dispensing details including who dispensed it and any remarks. Only `pharmacy`, `admin`, and `superadmin` roles are authorized."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin – Doctor Management",
+      "description": "Admin-only endpoints for managing doctor profiles, activating/deactivating doctors, and manually triggering slot generation or cleanup.\n\nAll routes in this folder require `Authorization: Bearer {{admin_token}}` with `admin` or `superadmin` role. These endpoints control the doctor roster and the rolling slot scheduler.",
+      "item": [
+        {
+          "name": "List All Doctors (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/doctors",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "doctors"]
+            },
+            "description": "Returns all doctor records including inactive ones. Intended for the admin management panel. Requires `admin` or `superadmin` role."
+          }
+        },
+        {
+          "name": "Get Doctor by ID (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/doctors/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "doctors", ":id"],
+              "variable": [
+                { "key": "id", "value": "664abc123def456", "description": "MongoDB ObjectId of the doctor" }
+              ]
+            },
+            "description": "Returns the full admin-level view of a doctor including all schedule fields, working days, holiday dates, and slot configuration. Requires `admin` or `superadmin` role."
+          }
+        },
+        {
+          "name": "Create Doctor (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/doctors",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "doctors"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Dr. Amara Perera\",\n  \"specialization\": \"General Physician\",\n  \"clinic\": \"OPD Room 2\",\n  \"fee\": 1500,\n  \"phone\": \"+94771234567\",\n  \"centerId\": \"664center001\",\n  \"startTime\": \"09:00\",\n  \"endTime\": \"13:00\",\n  \"sessionTime\": 20,\n  \"workingDays\": [\"mon\", \"tue\", \"wed\", \"thu\", \"fri\"],\n  \"holidayDates\": [\"2026-04-10\", \"2026-04-11\"]\n}"
+            },
+            "description": "Creates a new doctor profile and immediately generates rolling appointment slots based on the provided schedule. `name`, `specialization`, `clinic`, `fee`, `phone`, and `centerId` are required.\n\n`startTime` and `endTime` must be in `HH:mm` format. `sessionTime` is the consultation duration in minutes. `workingDays` accepts mon/tue/wed/thu/fri/sat/sun. After creation, slots are auto-generated for the next 14 days (configurable)."
+          }
+        },
+        {
+          "name": "Update Doctor (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/doctors/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "doctors", ":id"],
+              "variable": [
+                { "key": "id", "value": "664abc123def456", "description": "MongoDB ObjectId of the doctor" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fee\": 2000,\n  \"startTime\": \"08:30\",\n  \"endTime\": \"12:30\",\n  \"sessionTime\": 15\n}"
+            },
+            "description": "Partially updates a doctor's profile fields. Include only the fields to change. Requires `admin` or `superadmin` role. Note: changing schedule fields does not automatically regenerate existing slots."
+          }
+        },
+        {
+          "name": "Set Doctor Active Status (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/doctors/:id/active",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "doctors", ":id", "active"],
+              "variable": [
+                { "key": "id", "value": "664abc123def456", "description": "MongoDB ObjectId of the doctor" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isActive\": false\n}"
+            },
+            "description": "Enables or disables a doctor's account. Inactive doctors are hidden from the public listing and their unbooked future slots may be deactivated. Requires `admin` or `superadmin` role."
+          }
+        },
+        {
+          "name": "Generate Upcoming Slots (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/doctors/generate-upcoming-slots",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "doctors", "generate-upcoming-slots"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"days\": 14\n}"
+            },
+            "description": "Manually triggers the rolling slot generation for all active doctors. Generates slots for the next `days` days (default: 14, configured via `DEFAULT_SLOT_WINDOW_DAYS` env var). Useful after setting up new doctors or after a server restart. Requires `admin` or `superadmin` role."
+          }
+        },
+        {
+          "name": "Cleanup Expired Slots (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/doctors/cleanup-expired-slots",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "doctors", "cleanup-expired-slots"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Deactivates all past unbooked slots to keep the database clean. This is normally run automatically by the server's scheduled slot maintenance, but can be triggered manually by an admin."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Lab – Diagnostic Tests",
+      "description": "Manages the catalogue of diagnostic/lab tests available at health centers. Each test has a name, description, category, price, sample type, instructions, and optional measurable parameters.\n\nPublic routes allow patients to browse available tests. Admin CRUD routes allow creation, updates, and deletion. Currently no authentication middleware is enforced on write routes (open to any caller).",
+      "item": [
+        {
+          "name": "Get All Diagnostic Tests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/lab/diagnostic-tests",
+              "host": ["{{base_url}}"],
+              "path": ["api", "lab", "diagnostic-tests"]
+            },
+            "description": "Returns all diagnostic tests in the catalogue. No authentication required. Used by patients to browse available lab tests and by booking flows to select a test."
+          }
+        },
+        {
+          "name": "Get Diagnostic Test by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/lab/diagnostic-tests/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "lab", "diagnostic-tests", ":id"],
+              "variable": [
+                { "key": "id", "value": "664test001", "description": "MongoDB ObjectId of the diagnostic test" }
+              ]
+            },
+            "description": "Returns the full details of a single diagnostic test by its MongoDB ObjectId, including parameters, sample type, price, and instructions."
+          }
+        },
+        {
+          "name": "Create Diagnostic Test",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/lab/diagnostic-tests",
+              "host": ["{{base_url}}"],
+              "path": ["api", "lab", "diagnostic-tests"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Complete Blood Count (CBC)\",\n  \"description\": \"Measures the levels of red blood cells, white blood cells, and platelets.\",\n  \"category\": \"Haematology\",\n  \"price\": 850,\n  \"sampleTypes\": \"Blood\",\n  \"instructions\": \"Fasting not required. Inform the technician of any medications.\",\n  \"centerId\": \"664center001\",\n  \"parameters\": [\n    { \"name\": \"Haemoglobin\", \"unit\": \"g/dL\", \"normalMinValue\": 12, \"normalMaxValue\": 17 },\n    { \"name\": \"WBC Count\", \"unit\": \"10^9/L\", \"normalMinValue\": 4.5, \"normalMaxValue\": 11 }\n  ]\n}"
+            },
+            "description": "Creates a new diagnostic test in the catalogue. `name` is required. `parameters` is an array of measurable result fields (name, unit, normalMinValue, normalMaxValue). A unique `testCode` is auto-generated."
+          }
+        },
+        {
+          "name": "Update Diagnostic Test",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/lab/diagnostic-tests/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "lab", "diagnostic-tests", ":id"],
+              "variable": [
+                { "key": "id", "value": "664test001", "description": "MongoDB ObjectId of the diagnostic test" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 950,\n  \"instructions\": \"Updated: Fasting for 4 hours required.\",\n  \"isActive\": true\n}"
+            },
+            "description": "Fully updates a diagnostic test record. Include all required fields alongside any changes. Requires the test's MongoDB ObjectId as a path parameter."
+          }
+        },
+        {
+          "name": "Delete Diagnostic Test",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/lab/diagnostic-tests/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "lab", "diagnostic-tests", ":id"],
+              "variable": [
+                { "key": "id", "value": "664test001", "description": "MongoDB ObjectId of the diagnostic test" }
+              ]
+            },
+            "description": "Permanently deletes a diagnostic test from the catalogue. This operation is irreversible. Returns 404 if the test is not found."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Lab – Appointment Slots",
+      "description": "Manages lab appointment slots at health centers. Slots define available time windows for patients to book laboratory tests.\n\nAdmins can generate, update, and delete slots. Patients can retrieve available slots by center. Note: these routes are mounted directly at the root (no `/api/lab/` prefix) – the full paths are `/api/generateSlots`, `/api/getSlots`, etc. as defined in the route file.",
+      "item": [
+        {
+          "name": "Generate Appointment Slots",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/generateSlots",
+              "host": ["{{base_url}}"],
+              "path": ["api", "generateSlots"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"center\": \"664center001\",\n  \"slotDate\": \"2026-04-15\",\n  \"startTime\": \"08:00\",\n  \"endTime\": \"12:00\",\n  \"intervalMinutes\": 30\n}"
+            },
+            "description": "Generates a batch of appointment slots for a lab center on a specified date. `center` (ObjectId), `slotDate`, `startTime`, and `endTime` are required. Duplicate slots (same center + date + startTime) are prevented by a unique index."
+          }
+        },
+        {
+          "name": "Update Appointment Slot",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/updateSlot/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "updateSlot", ":id"],
+              "variable": [
+                { "key": "id", "value": "slot001", "description": "MongoDB ObjectId of the slot" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CANCELLED\",\n  \"startTime\": \"08:30\",\n  \"endTime\": \"09:00\"\n}"
+            },
+            "description": "Updates an existing lab appointment slot. Can be used to change the slot's time, status (`AVAILABLE`, `BOOKED`, `CANCELLED`), or linked booking."
+          }
+        },
+        {
+          "name": "Get All Appointment Slots",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/getSlots",
+              "host": ["{{base_url}}"],
+              "path": ["api", "getSlots"]
+            },
+            "description": "Returns all lab appointment slots across all centers. Intended for admin overviews. For a center-specific or availability query use the other get-slots endpoints."
+          }
+        },
+        {
+          "name": "Get Slots by Center",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/getSlotsByCenter/:centerId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "getSlotsByCenter", ":centerId"],
+              "variable": [
+                { "key": "centerId", "value": "664center001", "description": "MongoDB ObjectId of the health center" }
+              ]
+            },
+            "description": "Returns all lab appointment slots belonging to a specific health center, regardless of their status. Useful for center-level admin management."
+          }
+        },
+        {
+          "name": "Get Available Slots by Center",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/getAvailableAppointmentSlots/:centerId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "getAvailableAppointmentSlots", ":centerId"],
+              "variable": [
+                { "key": "centerId", "value": "664center001", "description": "MongoDB ObjectId of the health center" }
+              ]
+            },
+            "description": "Returns only slots with `status: AVAILABLE` for a specific center. Used in the patient booking flow to populate the time-picker with open slots."
+          }
+        },
+        {
+          "name": "Delete Appointment Slot",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/deleteSlot/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "deleteSlot", ":id"],
+              "variable": [
+                { "key": "id", "value": "slot001", "description": "MongoDB ObjectId of the slot" }
+              ]
+            },
+            "description": "Permanently deletes a specific lab appointment slot. Only unbooked slots should be deleted to avoid orphaned bookings. Returns 404 if not found."
+          }
+        },
+        {
+          "name": "Delete Expired Unbooked Slots",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/deleteExpiredUnbooked",
+              "host": ["{{base_url}}"],
+              "path": ["api", "deleteExpiredUnbooked"]
+            },
+            "description": "Bulk-deletes all past (expired) lab slots that were never booked. Useful for periodic database cleanup. Does not affect booked or cancelled slots."
+          }
+        },
+        {
+          "name": "Delete Upcoming Unbooked Slots",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/deleteUpcomingUnbooked",
+              "host": ["{{base_url}}"],
+              "path": ["api", "deleteUpcomingUnbooked"]
+            },
+            "description": "Bulk-deletes all future lab slots that have not yet been booked. Use with caution – this removes all open capacity for upcoming dates. Typically used when regenerating a fresh slot schedule."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Lab – Bookings",
+      "description": "Handles lab appointment bookings for patients at health centers. Each booking links a patient (`user`), a slot, a diagnostic test, and a health center.\n\nThese routes are mounted at the root level (no prefix path). Full paths include `/api/bookappointment`, `/api/appointment/:id`, etc. as defined in the router file.",
+      "item": [
+        {
+          "name": "Book Lab Appointment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/bookappointment",
+              "host": ["{{base_url}}"],
+              "path": ["api", "bookappointment"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user\": \"664patient001\",\n  \"slot\": \"slot001\",\n  \"diagnosticTest\": \"664test001\",\n  \"healthCenter\": \"664center001\",\n  \"appointmentDate\": \"2026-04-15T09:00:00.000Z\"\n}"
+            },
+            "description": "Books a lab appointment for a patient. All five fields are required: `user` (patient ObjectId), `slot` (slot ObjectId), `diagnosticTest` (test ObjectId), `healthCenter` (center ObjectId), and `appointmentDate`.\n\nInitial status is `CONFIRMED`. Returns the created booking object."
+          }
+        },
+        {
+          "name": "Get Lab Appointment by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/appointment/:bookingId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "appointment", ":bookingId"],
+              "variable": [
+                { "key": "bookingId", "value": "booking001", "description": "MongoDB ObjectId of the booking" }
+              ]
+            },
+            "description": "Returns the full details of a single lab appointment booking including linked user, slot, test, and center information."
+          }
+        },
+        {
+          "name": "Get Lab Appointments by User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/user-appointments/:userId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user-appointments", ":userId"],
+              "variable": [
+                { "key": "userId", "value": "664patient001", "description": "MongoDB ObjectId of the patient" }
+              ]
+            },
+            "description": "Returns all lab bookings made by a specific patient. Used to display a patient's booking history in their dashboard."
+          }
+        },
+        {
+          "name": "Update Lab Appointment",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/updateappointment/:bookingId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "updateappointment", ":bookingId"],
+              "variable": [
+                { "key": "bookingId", "value": "booking001", "description": "MongoDB ObjectId of the booking" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appointmentStatus\": \"COMPLETED\",\n  \"appointmentDate\": \"2026-04-15T10:00:00.000Z\"\n}"
+            },
+            "description": "Updates an existing lab appointment booking. Can be used to change the status (`CONFIRMED`, `CANCELLED`, `COMPLETED`) or reschedule the appointment date."
+          }
+        },
+        {
+          "name": "Delete Lab Appointment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/deleteappointment/:bookingId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "deleteappointment", ":bookingId"],
+              "variable": [
+                { "key": "bookingId", "value": "booking001", "description": "MongoDB ObjectId of the booking" }
+              ]
+            },
+            "description": "Permanently deletes a lab appointment booking. Returns 404 if the booking does not exist. Use with caution as this is non-reversible."
+          }
+        },
+        {
+          "name": "Get Appointments by Center (Center Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/getappointments/:centerId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "getappointments", ":centerId"],
+              "variable": [
+                { "key": "centerId", "value": "664center001", "description": "MongoDB ObjectId of the health center" }
+              ]
+            },
+            "description": "Returns all lab appointment bookings for a specific health center. Used by center administrators to manage their incoming appointments."
+          }
+        },
+        {
+          "name": "Get All Lab Appointments (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/getallappointments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "getallappointments"]
+            },
+            "description": "Returns all lab appointment bookings across all health centers. Intended for system-wide admin views and reporting."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Test Types",
+      "description": "Manages test type definitions (aliases for `DiagnosticTest`). Both `/api/test-types` and `/api/lab/diagnostic-tests` share the same underlying data collection (`testtypes`). This folder documents the `/api/test-types` route group.\n\nFull CRUD is supported. No authentication middleware is currently enforced on these routes.",
+      "item": [
+        {
+          "name": "Get All Test Types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/test-types",
+              "host": ["{{base_url}}"],
+              "path": ["api", "test-types"]
+            },
+            "description": "Returns all test type records from the shared diagnostic test collection. Equivalent to `/api/lab/diagnostic-tests`."
+          }
+        },
+        {
+          "name": "Get Test Type by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/test-types/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "test-types", ":id"],
+              "variable": [
+                { "key": "id", "value": "664testtype001", "description": "MongoDB ObjectId of the test type" }
+              ]
+            },
+            "description": "Returns the full details of a specific test type by MongoDB ObjectId."
+          }
+        },
+        {
+          "name": "Create Test Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/test-types",
+              "host": ["{{base_url}}"],
+              "path": ["api", "test-types"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lipid Profile\",\n  \"description\": \"Measures cholesterol and triglyceride levels in the blood.\",\n  \"category\": \"Biochemistry\",\n  \"price\": 1200,\n  \"sampleTypes\": \"Blood\",\n  \"instructions\": \"Fasting required for 12 hours before the test.\",\n  \"parameters\": [\n    { \"name\": \"Total Cholesterol\", \"unit\": \"mg/dL\", \"normalMinValue\": 0, \"normalMaxValue\": 200 },\n    { \"name\": \"LDL\", \"unit\": \"mg/dL\", \"normalMinValue\": 0, \"normalMaxValue\": 100 }\n  ]\n}"
+            },
+            "description": "Creates a new test type / diagnostic test entry. Writes to the same collection as `/api/lab/diagnostic-tests`. A unique auto-generated `testCode` is assigned."
+          }
+        },
+        {
+          "name": "Update Test Type",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/test-types/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "test-types", ":id"],
+              "variable": [
+                { "key": "id", "value": "664testtype001", "description": "MongoDB ObjectId of the test type" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"price\": 1350,\n  \"isActive\": true\n}"
+            },
+            "description": "Updates a test type record. Provide the full or partial document to update. Returns the updated document."
+          }
+        },
+        {
+          "name": "Delete Test Type",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/test-types/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "test-types", ":id"],
+              "variable": [
+                { "key": "id", "value": "664testtype001", "description": "MongoDB ObjectId of the test type" }
+              ]
+            },
+            "description": "Permanently deletes a test type by MongoDB ObjectId. Returns 404 if not found."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Test Results",
+      "description": "Manages patient lab test results entered by lab technicians. Each result is linked to a lab appointment, test type, patient, and optionally a doctor.\n\nResults include measurable parameter values (name, value, unit, normal range). The overall `condition` can be `normal`, `severe`, or `unknown`. A `recommendConsultation` flag can be set for worrying results.",
+      "item": [
+        {
+          "name": "Create Test Result",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/test-results",
+              "host": ["{{base_url}}"],
+              "path": ["api", "test-results"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"appointmentId\": \"booking001\",\n  \"testTypeId\": \"664testtype001\",\n  \"patientId\": \"664patient001\",\n  \"doctorId\": \"664abc123def456\",\n  \"status\": \"completed\",\n  \"condition\": \"normal\",\n  \"results\": [\n    {\n      \"name\": \"Haemoglobin\",\n      \"value\": 14.5,\n      \"unit\": \"g/dL\",\n      \"normalMinValue\": 12,\n      \"normalMaxValue\": 17\n    },\n    {\n      \"name\": \"WBC Count\",\n      \"value\": 7.2,\n      \"unit\": \"10^9/L\",\n      \"normalMinValue\": 4.5,\n      \"normalMaxValue\": 11\n    }\n  ],\n  \"notes\": \"All values within normal range.\",\n  \"recommendConsultation\": false\n}"
+            },
+            "description": "Creates a new lab test result for a patient appointment. `appointmentId`, `testTypeId`, and `results` array are required. At least one parameter result must be provided in the `results` array.\n\nValid statuses: `pending`, `undergoing`, `completed`. Valid conditions: `normal`, `severe`, `unknown`."
+          }
+        },
+        {
+          "name": "Get All Test Results",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/test-results",
+              "host": ["{{base_url}}"],
+              "path": ["api", "test-results"]
+            },
+            "description": "Returns all test results in the system. Intended for admin/lab-tech overviews. May return a large dataset in production."
+          }
+        },
+        {
+          "name": "Get Test Results by Patient",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/test-results/patient/:patientId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "test-results", "patient", ":patientId"],
+              "variable": [
+                { "key": "patientId", "value": "664patient001", "description": "MongoDB ObjectId of the patient" }
+              ]
+            },
+            "description": "Returns all test results for a specific patient, sorted by most recent first. Used on the patient's health record / results history page."
+          }
+        },
+        {
+          "name": "Get Test Result by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/test-results/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "test-results", ":id"],
+              "variable": [
+                { "key": "id", "value": "result001", "description": "MongoDB ObjectId of the test result" }
+              ]
+            },
+            "description": "Returns the full detail of a single test result record including all parameter values, condition assessment, and consultation recommendation."
+          }
+        },
+        {
+          "name": "Update Test Result",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/test-results/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "test-results", ":id"],
+              "variable": [
+                { "key": "id", "value": "result001", "description": "MongoDB ObjectId of the test result" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"completed\",\n  \"condition\": \"severe\",\n  \"notes\": \"WBC count elevated. Recommend consultation.\",\n  \"recommendConsultation\": true,\n  \"results\": [\n    {\n      \"name\": \"WBC Count\",\n      \"value\": 13.5,\n      \"unit\": \"10^9/L\",\n      \"normalMinValue\": 4.5,\n      \"normalMaxValue\": 11\n    }\n  ]\n}"
+            },
+            "description": "Updates an existing test result. Typically used when a lab technician corrects values or updates the status from `undergoing` to `completed`."
+          }
+        },
+        {
+          "name": "Delete Test Result",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/test-results/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "test-results", ":id"],
+              "variable": [
+                { "key": "id", "value": "result001", "description": "MongoDB ObjectId of the test result" }
+              ]
+            },
+            "description": "Permanently deletes a test result record by ID. Irreversible. Returns 404 if not found."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pharmacy – Medication Inventory",
+      "description": "Manages the pharmacy's medication stock (inventory). Each medication has a name, brand, strength, form (tablet/capsule/syrup/etc.), category, and one or more stock batches with expiry dates and quantities.\n\nNote: These routes exist in the codebase but may not be mounted in the current server.js. Verify with the backend team before using in production. Base path assumed: `/api/pharmacy/medications`.",
+      "item": [
+        {
+          "name": "Health Check – Medications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pharmacy/medications/test",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pharmacy", "medications", "test"]
+            },
+            "description": "Simple health-check for the medication inventory route. Returns `{ ok: true }` if the route is reachable."
+          }
+        },
+        {
+          "name": "Create Medication",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pharmacy/medications",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pharmacy", "medications"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Paracetamol\",\n  \"brandName\": \"Panadol\",\n  \"strength\": \"500mg\",\n  \"form\": \"tablet\",\n  \"category\": \"Analgesic\",\n  \"description\": \"Used for pain relief and fever reduction.\",\n  \"unit\": \"tablets\",\n  \"isActive\": true\n}"
+            },
+            "description": "Creates a new medication entry in the inventory. `name`, `strength`, and `form` are required. Valid forms: `tablet`, `capsule`, `syrup`, `injection`, `cream`, `drops`, `other`. Batches are added separately after creation."
+          }
+        },
+        {
+          "name": "Get All Medications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pharmacy/medications",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pharmacy", "medications"]
+            },
+            "description": "Returns all medication records sorted by most recently added. Each record includes a computed `totalQuantity` virtual field (sum of all batch quantities)."
+          }
+        },
+        {
+          "name": "Get Medication by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pharmacy/medications/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pharmacy", "medications", ":id"],
+              "variable": [
+                { "key": "id", "value": "med001", "description": "MongoDB ObjectId of the medication" }
+              ]
+            },
+            "description": "Returns the full medication record including all batch details, total quantity, and medication metadata."
+          }
+        },
+        {
+          "name": "Update Medication",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pharmacy/medications/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pharmacy", "medications", ":id"],
+              "variable": [
+                { "key": "id", "value": "med001", "description": "MongoDB ObjectId of the medication" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"brandName\": \"Calpol\",\n  \"description\": \"Updated product description.\",\n  \"isActive\": true\n}"
+            },
+            "description": "Updates a medication record. Include only the fields to modify. Does not modify batches; use the batch endpoints to manage stock."
+          }
+        },
+        {
+          "name": "Delete Medication",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pharmacy/medications/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pharmacy", "medications", ":id"],
+              "variable": [
+                { "key": "id", "value": "med001", "description": "MongoDB ObjectId of the medication" }
+              ]
+            },
+            "description": "Permanently deletes a medication and all its batch records. Returns 404 if not found. Use with caution."
+          }
+        },
+        {
+          "name": "Add Batch to Medication",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pharmacy/medications/:id/batches",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pharmacy", "medications", ":id", "batches"],
+              "variable": [
+                { "key": "id", "value": "med001", "description": "MongoDB ObjectId of the medication" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"batchNo\": \"BCH-2026-001\",\n  \"expiryDate\": \"2028-06-30\",\n  \"quantity\": 500,\n  \"unitPrice\": 12.50,\n  \"addedById\": \"pharmacist001\",\n  \"addedByName\": \"Pharmacist Nalini\",\n  \"addedByEmail\": \"nalini@healthcenter.lk\"\n}"
+            },
+            "description": "Adds a new stock batch to an existing medication. `batchNo`, `expiryDate`, `quantity`, `addedById`, and `addedByName` are required. The batch is embedded inside the medication document."
+          }
+        },
+        {
+          "name": "Update Medication Batch",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pharmacy/medications/:id/batches/:batchId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pharmacy", "medications", ":id", "batches", ":batchId"],
+              "variable": [
+                { "key": "id", "value": "med001", "description": "MongoDB ObjectId of the medication" },
+                { "key": "batchId", "value": "batch001", "description": "MongoDB ObjectId of the batch (sub-document)" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 450,\n  \"unitPrice\": 13.00\n}"
+            },
+            "description": "Updates a specific batch within a medication. Only include fields to change. The batch is identified by both the medication `id` and the batch `batchId`."
+          }
+        },
+        {
+          "name": "Delete Medication Batch",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pharmacy/medications/:id/batches/:batchId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pharmacy", "medications", ":id", "batches", ":batchId"],
+              "variable": [
+                { "key": "id", "value": "med001", "description": "MongoDB ObjectId of the medication" },
+                { "key": "batchId", "value": "batch001", "description": "MongoDB ObjectId of the batch to delete" }
+              ]
+            },
+            "description": "Removes a specific stock batch from a medication. The total available stock will decrease accordingly. Returns 404 if the medication or batch is not found."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pharmacy – Orders",
+      "description": "Manages pharmacy orders — the dispensing of medications to patients using a prescription as reference. Each order captures patient details, a prescription snapshot, and one or more medication items with quantity and batch allocation details.\n\nNote: These routes exist in the codebase but may not be mounted in the current server.js. Verify with the backend team before using in production. Base path assumed: `/api/pharmacy/orders`.",
+      "item": [
+        {
+          "name": "Health Check – Orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pharmacy/orders/test",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pharmacy", "orders", "test"]
+            },
+            "description": "Simple health-check for the pharmacy order route. Returns `{ ok: true }` if the route is reachable."
+          }
+        },
+        {
+          "name": "Create Pharmacy Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pharmacy/orders",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pharmacy", "orders"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patient\": {\n    \"name\": \"Jane Doe\",\n    \"email\": \"jane.doe@example.com\",\n    \"phone\": \"+94771234567\"\n  },\n  \"prescriptionTextSnapshot\": \"Paracetamol 500mg x15, Amoxicillin 250mg x10\",\n  \"items\": [\n    {\n      \"medicationId\": \"med001\",\n      \"requestedQty\": 15,\n      \"instructions\": \"Take 1 tablet 3 times a day after meals.\"\n    },\n    {\n      \"medicationId\": \"med002\",\n      \"requestedQty\": 10,\n      \"instructions\": \"Take 1 capsule twice a day.\"\n    }\n  ]\n}"
+            },
+            "description": "Creates a new pharmacy order for a patient based on a prescription. The server deducts stock from available batches (FIFO). `patient`, `prescriptionTextSnapshot`, and `items` are required.\n\nIf sufficient stock is available, status is `CONFIRMED`. If stock is insufficient, status becomes `WAITING_STOCK` and a notification may be sent."
+          }
+        },
+        {
+          "name": "Get All Orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pharmacy/orders",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pharmacy", "orders"]
+            },
+            "description": "Returns all pharmacy orders sorted by most recent first. Includes order number, patient details, status, items, and totals."
+          }
+        },
+        {
+          "name": "Get Order by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/pharmacy/orders/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pharmacy", "orders", ":id"],
+              "variable": [
+                { "key": "id", "value": "order001", "description": "MongoDB ObjectId of the pharmacy order" }
+              ]
+            },
+            "description": "Returns the full details of a specific pharmacy order including all items, batch allocations, patient info, and totals."
+          }
+        },
+        {
+          "name": "Update Order (Status / Patient / Prescription)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pharmacy/orders/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pharmacy", "orders", ":id"],
+              "variable": [
+                { "key": "id", "value": "order001", "description": "MongoDB ObjectId of the pharmacy order" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CONFIRMED\",\n  \"patient\": {\n    \"name\": \"Jane Doe\",\n    \"email\": \"jane.updated@example.com\",\n    \"phone\": \"+94779876543\"\n  }\n}"
+            },
+            "description": "Updates non-item fields of a pharmacy order such as status, patient contact details, or prescription snapshot. Does NOT restore or re-deduct stock. Valid statuses: `CONFIRMED`, `WAITING_STOCK`."
+          }
+        },
+        {
+          "name": "Update Order Items (Re-deduct Stock)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/pharmacy/orders/:id/items",
+              "host": ["{{base_url}}"],
+              "path": ["api", "pharmacy", "orders", ":id", "items"],
+              "variable": [
+                { "key": "id", "value": "order001", "description": "MongoDB ObjectId of the pharmacy order" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    {\n      \"medicationId\": \"med001\",\n      \"requestedQty\": 20,\n      \"instructions\": \"Take 2 tablets 3 times a day.\"\n    }\n  ]\n}"
+            },
+            "description": "Updates the medication items in a pharmacy order. Previous stock deductions are restored first, then new quantities are re-deducted from available inventory. Use this when adjusting dispensed quantities after order creation."
+          }
+        }
+      ]
+    }
+  ]
+}

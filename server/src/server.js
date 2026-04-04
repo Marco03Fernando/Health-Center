@@ -37,6 +37,11 @@ const userAuthRoutes = require("./routes/auth/userAuth.routes");
 const medicationInventoryRoutes = require("./routes/pharmacy/medicationInventoryRoutes");
 const pharmacyOrderRoutes = require("./routes/pharmacy/pharmacyOrderRoutes");
 
+// Lab booking routes (diagnostic tests, appointment slots, bookings)
+const diagnosticTestRoutes = require("./routes/diagnosticTest.routes");
+const labAppointmentRoutes = require("./routes/appointmentRoutes");
+const labSlotRoutes = require("./routes/appointmentSlotRoutes");
+
 // models needed for auto slot maintenance
 const Doctor = require("./models/doctorChanneling/doctor.model");
 const Slot = require("./models/doctorChanneling/slot.model");
@@ -399,6 +404,16 @@ app.use("/api/admin/auth", adminAuthRoutes);
 app.use("/api/auth", userAuthRoutes);
 app.use("/api/medication-inventory", medicationInventoryRoutes);
 app.use("/api/pharmacy-orders", pharmacyOrderRoutes);
+
+// Lab booking routes
+app.use("/api/lab/diagnostic-tests", diagnosticTestRoutes);
+app.use(labAppointmentRoutes);
+app.use(labSlotRoutes);
+
+// Lab Test management route
+app.use("/api/test-types", require("../../server/src/routes/TestManagement/testTypeRoutes"));
+app.use("/api/test-results", require("../../server/src/routes/TestManagement/testResultRoutes"));
+
 
 // Error handler
 app.use(errorMiddleware);
