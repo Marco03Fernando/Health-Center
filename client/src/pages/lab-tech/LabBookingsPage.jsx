@@ -17,19 +17,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   FlaskConical,
-  Search,
   Loader2,
-  Calendar,
-  Clock,
-  MapPin,
-  User,
-  AlertCircle,
   AlertTriangle,
 } from "lucide-react";
 
-// ✅ STATUS FILTERS
+// STATUS FILTERS
 const STATUS_FILTERS = [
-  { label: "All", value: "all" },
   { label: "Pending", value: "PENDING" },
   { label: "Undergoing", value: "UNDERGOING" },
   { label: "Results Pending", value: "RESULT_PENDING" },
@@ -37,7 +30,7 @@ const STATUS_FILTERS = [
   { label: "Cancelled", value: "CANCELLED" },
 ];
 
-// ✅ STATUS COLORS
+// STATUS COLORS
 const STATUS_STYLES = {
   PENDING: "bg-yellow-100 text-yellow-800",
   UNDERGOING: "bg-blue-100 text-blue-800",
@@ -46,13 +39,19 @@ const STATUS_STYLES = {
   CANCELLED: "bg-red-100 text-red-800",
 };
 
-// ✅ STATUS FLOW
+// STATUS FLOW
 const STATUS_FLOW = [
   "PENDING",
   "UNDERGOING",
   "RESULT_PENDING",
   "COMPLETED",
 ];
+
+// ✅ NORMALIZE CONFIRMED → PENDING
+const normalizeStatus = (status) => {
+  if (status === "CONFIRMED") return "PENDING";
+  return status;
+};
 
 function getNextStatus(current) {
   const index = STATUS_FLOW.indexOf(current);
@@ -79,12 +78,10 @@ export default function LabBookingsPage() {
   const [cancelId, setCancelId] = useState(null);
   const [cancelling, setCancelling] = useState(false);
 
-  // ✅ FETCH ALL BOOKINGS (ADMIN STYLE)
   async function fetchBookings() {
     try {
       setLoading(true);
       setError("");
-
       const data = await getAllLabBookings();
       setBookings(data);
     } catch (err) {
@@ -98,7 +95,6 @@ export default function LabBookingsPage() {
     fetchBookings();
   }, []);
 
-  // ✅ NEXT STATUS HANDLER
   async function handleNextStatus(id, currentStatus) {
     try {
       const next = getNextStatus(currentStatus);
@@ -111,7 +107,6 @@ export default function LabBookingsPage() {
     }
   }
 
-  // ✅ CANCEL
   async function handleCancel(id) {
     try {
       setCancelling(true);
@@ -126,7 +121,7 @@ export default function LabBookingsPage() {
     }
   }
 
-  // ✅ FILTERING
+  // FILTER
   const filtered = useMemo(() => {
     return bookings.filter((b) => {
       const q = search.toLowerCase();
@@ -134,49 +129,47 @@ export default function LabBookingsPage() {
       const matchSearch =
         !q ||
         (b.diagnosticTest?.name || "").toLowerCase().includes(q) ||
-        (b.user?.fullName || b.user?.name || "").toLowerCase().includes(q) ||
-        (b.user?.email || "").toLowerCase().includes(q);
+        (b.user?.name || "").toLowerCase().includes(q);
 
       const matchStatus =
-        statusFilter === "all" || b.appointmentStatus === statusFilter;
+        statusFilter === "all" ||
+        normalizeStatus(b.appointmentStatus) === statusFilter;
 
       return matchSearch && matchStatus;
     });
   }, [bookings, search, statusFilter]);
 
-  // ✅ COUNTS
-  const pendingCount = bookings.filter(b => b.appointmentStatus === "PENDING").length;
-  const undergoingCount = bookings.filter(b => b.appointmentStatus === "UNDERGOING").length;
-  const completedCount = bookings.filter(b => b.appointmentStatus === "COMPLETED").length;
-  const cancelledCount = bookings.filter(b => b.appointmentStatus === "CANCELLED").length;
+  // COUNTS
+  const pendingCount = bookings.filter(b => normalizeStatus(b.appointmentStatus) === "PENDING").length;
+  const undergoingCount = bookings.filter(b => normalizeStatus(b.appointmentStatus) === "UNDERGOING").length;
+  const resultPendingCount = bookings.filter(b => normalizeStatus(b.appointmentStatus) === "RESULT_PENDING").length;
+  const completedCount = bookings.filter(b => normalizeStatus(b.appointmentStatus) === "COMPLETED").length;
+  const cancelledCount = bookings.filter(b => normalizeStatus(b.appointmentStatus) === "CANCELLED").length;
 
   return (
-    <div className="space-y-8 p-1 md:p-2">
+    <div className="space-y-8 p-2">
 
       {/* HEADER */}
-      <div className="rounded-3xl border bg-gradient-to-br from-background to-muted/30 p-6 shadow-sm md:p-8">
-        <div className="space-y-3">
-          <div className="inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground">
-            <FlaskConical className="h-3.5 w-3.5" />
-            Lab Booking Management
-          </div>
-          <h1 className="text-3xl font-bold">Lab Bookings</h1>
+      <div className="rounded-3xl border bg-gradient-to-br from-background to-muted/30 p-6 shadow-sm">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <FlaskConical className="h-4 w-4" />
+          Lab Booking Management
         </div>
+        <h1 className="text-3xl font-bold mt-2">Lab Bookings</h1>
 
-        {/* STATS */}
-        <div className="mt-6 grid gap-4 sm:grid-cols-4">
+        {/* COUNTERS */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
           {[
             { label: "Pending", value: pendingCount },
             { label: "Undergoing", value: undergoingCount },
+            { label: "Results Pending", value: resultPendingCount },
             { label: "Completed", value: completedCount },
             { label: "Cancelled", value: cancelledCount },
-          ].map(({ label, value }) => (
-            <Card key={label}>
-              <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground">{label}</p>
-                <p className="text-2xl font-bold">
-                  {loading ? "--" : value}
-                </p>
+          ].map((item) => (
+            <Card key={item.label}>
+              <CardContent className="p-4">
+                <p className="text-sm text-muted-foreground">{item.label}</p>
+                <p className="text-xl font-bold">{item.value}</p>
               </CardContent>
             </Card>
           ))}
@@ -185,28 +178,36 @@ export default function LabBookingsPage() {
 
       {/* FILTERS */}
       <Card>
-        <CardContent className="p-5">
-          <div className="flex flex-col gap-4 md:flex-row justify-between">
+        <CardContent className="p-5 space-y-4">
 
+          {/* SEARCH + ALL */}
+          <div className="flex gap-2">
             <Input
               placeholder="Search..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-
-            <div className="flex gap-2 flex-wrap">
-              {STATUS_FILTERS.map((f) => (
-                <Button
-                  key={f.value}
-                  variant={statusFilter === f.value ? "default" : "outline"}
-                  onClick={() => setStatusFilter(f.value)}
-                >
-                  {f.label}
-                </Button>
-              ))}
-            </div>
-
+            <Button
+              variant={statusFilter === "all" ? "default" : "outline"}
+              onClick={() => setStatusFilter("all")}
+            >
+              All
+            </Button>
           </div>
+
+          {/* OTHER FILTERS BELOW */}
+          <div className="flex flex-wrap gap-2">
+            {STATUS_FILTERS.map((f) => (
+              <Button
+                key={f.value}
+                variant={statusFilter === f.value ? "default" : "outline"}
+                onClick={() => setStatusFilter(f.value)}
+              >
+                {f.label}
+              </Button>
+            ))}
+          </div>
+
         </CardContent>
       </Card>
 
@@ -215,36 +216,48 @@ export default function LabBookingsPage() {
         <Loader2 className="animate-spin" />
       ) : (
         <div className="space-y-4">
-          {filtered.map((b) => (
-            <Card key={b._id}>
-              <CardContent className="p-5 flex justify-between items-center">
+          {filtered.map((b) => {
+            const status = normalizeStatus(b.appointmentStatus);
 
-                <div>
-                  <h3>{b.diagnosticTest?.name}</h3>
-                  <p>{b.user?.name}</p>
-                  <p>{formatDate(b.appointmentDate)}</p>
+            return (
+              <Card key={b._id}>
+                <CardContent className="p-5 flex justify-between items-center">
 
-                  <Badge className={STATUS_STYLES[b.appointmentStatus]}>
-                    {b.appointmentStatus}
-                  </Badge>
-                </div>
+                  <div className="space-y-1">
 
-                <div className="flex gap-2">
+                    {/* USER NAME (PRIMARY) */}
+                    <h3 className="text-base font-semibold">
+                      {b.user?.fullName || b.user?.name || "Patient"}
+                    </h3>
 
-                  {/* NEXT STATUS */}
-                  {getNextStatus(b.appointmentStatus) && b.appointmentStatus !== "CANCELLED" && (
-                    <Button
-                      onClick={() => handleNextStatus(b._id, b.appointmentStatus)}
-                    >
-                      {b.appointmentStatus === "PENDING" && "Start"}
-                      {b.appointmentStatus === "UNDERGOING" && "Mark Result"}
-                      {b.appointmentStatus === "RESULT_PENDING" && "Complete"}
-                    </Button>
-                  )}
+                    {/* TEST NAME (SECONDARY HIGHLIGHT) */}
+                    <p className="text-sm font-medium text-muted-foreground">
+                      {b.diagnosticTest?.name || "Diagnostic Test"}
+                    </p>
 
-                  {/* CANCEL */}
-                  {b.appointmentStatus !== "COMPLETED" &&
-                    b.appointmentStatus !== "CANCELLED" && (
+                    {/* DATE + STATUS */}
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>{formatDate(b.appointmentDate)}</span>
+
+                      <Badge className={`ml-2 ${STATUS_STYLES[status]}`}>
+                        {status}
+                      </Badge>
+                    </div>
+
+                  </div>
+                  <div className="flex gap-2">
+
+                    {/* NEXT STATUS */}
+                    {getNextStatus(status) && status !== "CANCELLED" && (
+                      <Button onClick={() => handleNextStatus(b._id, status)}>
+                        {status === "PENDING" && "Start"}
+                        {status === "UNDERGOING" && "Mark Result"}
+                        {status === "RESULT_PENDING" && "Complete"}
+                      </Button>
+                    )}
+
+                    {/* CANCEL */}
+                    {status !== "COMPLETED" && status !== "CANCELLED" && (
                       <Button
                         variant="destructive"
                         onClick={() => setCancelId(b._id)}
@@ -252,11 +265,12 @@ export default function LabBookingsPage() {
                         Cancel
                       </Button>
                     )}
-                </div>
+                  </div>
 
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -264,7 +278,10 @@ export default function LabBookingsPage() {
       <AlertDialog open={!!cancelId}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cancel Booking?</AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Cancel Booking?
+            </AlertDialogTitle>
             <AlertDialogDescription>
               This cannot be undone.
             </AlertDialogDescription>
