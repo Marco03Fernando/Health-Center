@@ -12,23 +12,41 @@ const {
   deleteBatch,
 } = require("../../controllers/pharmacy/medicationInventoryController");
 
+const { protect } = require("../../middlewares/auth.middleware");
+const { allowRoles } = require("../../middlewares/role.middleware");
+
 
 router.get("/test", (req, res) => {
   res.json({ ok: true });
 });
 
 
-router.post("/", createMedication);
+router.post("/", protect, allowRoles("pharmacy", "PHARMACIST"), createMedication);
 router.get("/", getAllMedications);
 
 
 router.get("/:id", getMedicationById);
-router.put("/:id", updateMedication);
-router.delete("/:id", deleteMedication);
+router.put("/:id", protect, allowRoles("pharmacy", "PHARMACIST"), updateMedication);
+router.delete("/:id", protect, allowRoles("pharmacy", "PHARMACIST"), deleteMedication);
 
 
-router.post("/:id/batches", addBatch);
-router.put("/:id/batches/:batchId", updateBatch);
-router.delete("/:id/batches/:batchId", deleteBatch);
+router.post(
+  "/:id/batches",
+  protect,
+  allowRoles("pharmacy", "PHARMACIST"),
+  addBatch
+);
+router.put(
+  "/:id/batches/:batchId",
+  protect,
+  allowRoles("pharmacy", "PHARMACIST"),
+  updateBatch
+);
+router.delete(
+  "/:id/batches/:batchId",
+  protect,
+  allowRoles("pharmacy", "PHARMACIST"),
+  deleteBatch
+);
 
 module.exports = router;
