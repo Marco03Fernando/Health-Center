@@ -18,7 +18,7 @@ const testResultSchema = new mongoose.Schema(
 
     testTypeId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "testType",
+      ref: "TestType",
       required: true,
     },
 

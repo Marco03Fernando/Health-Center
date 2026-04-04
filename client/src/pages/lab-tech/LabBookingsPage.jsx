@@ -47,7 +47,7 @@ const STATUS_FLOW = [
   "COMPLETED",
 ];
 
-// ✅ NORMALIZE CONFIRMED → PENDING
+// NORMALIZE CONFIRMED → PENDING
 const normalizeStatus = (status) => {
   if (status === "CONFIRMED") return "PENDING";
   return status;
@@ -121,15 +121,35 @@ export default function LabBookingsPage() {
     }
   }
 
+  function handleAddResult(booking) {
+    navigate(`/lab/test-results/new/${booking._id}`, {
+      state: { booking },
+    });
+  }
+
   // FILTER
   const filtered = useMemo(() => {
     return bookings.filter((b) => {
-      const q = search.toLowerCase();
+      const q = search.trim().toLowerCase();
+
+      const patientName = (
+        b?.user?.fullName ||
+        b?.user?.name ||
+        ""
+      ).toLowerCase();
+
+      const testName = (
+        b?.diagnosticTest?.name ||
+        ""
+      ).toLowerCase();
+
+      const appointmentId = (b?._id || "").toLowerCase();
 
       const matchSearch =
         !q ||
-        (b.diagnosticTest?.name || "").toLowerCase().includes(q) ||
-        (b.user?.name || "").toLowerCase().includes(q);
+        patientName.includes(q) ||
+        testName.includes(q) ||
+        appointmentId.includes(q);
 
       const matchStatus =
         statusFilter === "all" ||
@@ -140,25 +160,34 @@ export default function LabBookingsPage() {
   }, [bookings, search, statusFilter]);
 
   // COUNTS
-  const pendingCount = bookings.filter(b => normalizeStatus(b.appointmentStatus) === "PENDING").length;
-  const undergoingCount = bookings.filter(b => normalizeStatus(b.appointmentStatus) === "UNDERGOING").length;
-  const resultPendingCount = bookings.filter(b => normalizeStatus(b.appointmentStatus) === "RESULT_PENDING").length;
-  const completedCount = bookings.filter(b => normalizeStatus(b.appointmentStatus) === "COMPLETED").length;
-  const cancelledCount = bookings.filter(b => normalizeStatus(b.appointmentStatus) === "CANCELLED").length;
+  const pendingCount = bookings.filter(
+    (b) => normalizeStatus(b.appointmentStatus) === "PENDING"
+  ).length;
+  const undergoingCount = bookings.filter(
+    (b) => normalizeStatus(b.appointmentStatus) === "UNDERGOING"
+  ).length;
+  const resultPendingCount = bookings.filter(
+    (b) => normalizeStatus(b.appointmentStatus) === "RESULT_PENDING"
+  ).length;
+  const completedCount = bookings.filter(
+    (b) => normalizeStatus(b.appointmentStatus) === "COMPLETED"
+  ).length;
+  const cancelledCount = bookings.filter(
+    (b) => normalizeStatus(b.appointmentStatus) === "CANCELLED"
+  ).length;
 
   return (
     <div className="space-y-8 p-2">
-
       {/* HEADER */}
       <div className="rounded-3xl border bg-gradient-to-br from-background to-muted/30 p-6 shadow-sm">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <FlaskConical className="h-4 w-4" />
           Lab Booking Management
         </div>
-        <h1 className="text-3xl font-bold mt-2">Lab Bookings</h1>
+        <h1 className="mt-2 text-3xl font-bold">Lab Bookings</h1>
 
         {/* COUNTERS */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
+        <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-5">
           {[
             { label: "Pending", value: pendingCount },
             { label: "Undergoing", value: undergoingCount },
@@ -178,12 +207,11 @@ export default function LabBookingsPage() {
 
       {/* FILTERS */}
       <Card>
-        <CardContent className="p-5 space-y-4">
-
+        <CardContent className="space-y-4 p-5">
           {/* SEARCH + ALL */}
           <div className="flex gap-2">
             <Input
-              placeholder="Search..."
+              placeholder="Search by patient, test, or appointment ID..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -207,7 +235,6 @@ export default function LabBookingsPage() {
               </Button>
             ))}
           </div>
-
         </CardContent>
       </Card>
 
@@ -221,21 +248,20 @@ export default function LabBookingsPage() {
 
             return (
               <Card key={b._id}>
-                <CardContent className="p-5 flex justify-between items-center">
-
+                <CardContent className="flex items-center justify-between p-5">
                   <div className="space-y-1">
-
-                    {/* USER NAME (PRIMARY) */}
                     <h3 className="text-base font-semibold">
                       {b.user?.fullName || b.user?.name || "Patient"}
                     </h3>
 
-                    {/* TEST NAME (SECONDARY HIGHLIGHT) */}
                     <p className="text-sm font-medium text-muted-foreground">
                       {b.diagnosticTest?.name || "Diagnostic Test"}
                     </p>
 
-                    {/* DATE + STATUS */}
+                    <p className="text-xs text-muted-foreground">
+                      Appointment ID: {b._id || "—"}
+                    </p>
+
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <span>{formatDate(b.appointmentDate)}</span>
 
@@ -243,16 +269,26 @@ export default function LabBookingsPage() {
                         {status}
                       </Badge>
                     </div>
-
                   </div>
-                  <div className="flex gap-2">
 
+                  <div className="flex gap-2">
                     {/* NEXT STATUS */}
-                    {getNextStatus(status) && status !== "CANCELLED" && (
+                    {status === "PENDING" && (
                       <Button onClick={() => handleNextStatus(b._id, status)}>
-                        {status === "PENDING" && "Start"}
-                        {status === "UNDERGOING" && "Mark Result"}
-                        {status === "RESULT_PENDING" && "Complete"}
+                        Start
+                      </Button>
+                    )}
+
+                    {status === "UNDERGOING" && (
+                      <Button onClick={() => handleNextStatus(b._id, status)}>
+                        Mark Results Pending
+                      </Button>
+                    )}
+
+                    {/* RESULT_PENDING => ADD RESULTS */}
+                    {status === "RESULT_PENDING" && (
+                      <Button onClick={() => handleAddResult(b)}>
+                        Add Results
                       </Button>
                     )}
 
@@ -266,7 +302,6 @@ export default function LabBookingsPage() {
                       </Button>
                     )}
                   </div>
-
                 </CardContent>
               </Card>
             );
@@ -298,7 +333,6 @@ export default function LabBookingsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
     </div>
   );
 }
