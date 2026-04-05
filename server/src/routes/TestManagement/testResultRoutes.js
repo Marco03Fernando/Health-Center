@@ -6,6 +6,10 @@ const testResultController = require("../../controllers/TestManagement/testResul
 router.post("/", testResultController.createTestResult);
 router.get("/", testResultController.getAllTestResults);
 router.get("/patient/:patientId", testResultController.getTestResultsByPatientId);
+
+// PDF route
+router.get("/:id/pdf", testResultController.generateTestResultPdf);
+
 router.get("/:id", testResultController.getTestResultById);
 router.put("/:id", testResultController.updateTestResult);
 router.delete("/:id", testResultController.deleteTestResult);

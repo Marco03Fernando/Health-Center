@@ -7,6 +7,7 @@ import {
   updateBookingStatus,
   getTestResults,
   updateTestResult,
+  openTestResultPdf,
 } from "@/services/lab-tech.service";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -626,7 +627,7 @@ export default function TestResultsPage() {
                                   <Calendar className="h-3.5 w-3.5" />
                                   {formatDate(
                                     r?.appointmentId?.slot?.slotDate ||
-                                      r?.appointmentId?.appointmentDate
+                                    r?.appointmentId?.appointmentDate
                                   )}
                                 </span>
                                 <Badge className={STATUS_STYLES.COMPLETED}>
@@ -647,6 +648,12 @@ export default function TestResultsPage() {
                                 onClick={() => openEditDialog(r)}
                               >
                                 Edit
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => openTestResultPdf(r._id)}
+                              >
+                                Open PDF
                               </Button>
                             </div>
                           </div>
@@ -777,7 +784,7 @@ export default function TestResultsPage() {
                               <Label className="text-xs">
                                 Value
                                 {param.normalMinValue !== undefined &&
-                                param.normalMaxValue !== undefined
+                                  param.normalMaxValue !== undefined
                                   ? ` (Normal: ${param.normalMinValue} - ${param.normalMaxValue})`
                                   : ""}
                               </Label>
@@ -914,7 +921,7 @@ export default function TestResultsPage() {
                       <p className="font-medium">
                         {formatDate(
                           viewingResult?.appointmentId?.slot?.slotDate ||
-                            viewingResult?.appointmentId?.appointmentDate
+                          viewingResult?.appointmentId?.appointmentDate
                         )}
                       </p>
                     </div>
@@ -957,7 +964,7 @@ export default function TestResultsPage() {
                             <p className="text-xs text-muted-foreground">Normal Range</p>
                             <p className="font-medium">
                               {param?.normalMinValue !== undefined &&
-                              param?.normalMaxValue !== undefined
+                                param?.normalMaxValue !== undefined
                                 ? `${param.normalMinValue} - ${param.normalMaxValue}`
                                 : "—"}
                             </p>
@@ -1067,7 +1074,7 @@ export default function TestResultsPage() {
                       <Input
                         value={formatDate(
                           editingResult?.appointmentId?.slot?.slotDate ||
-                            editingResult?.appointmentId?.appointmentDate
+                          editingResult?.appointmentId?.appointmentDate
                         )}
                         readOnly
                       />
@@ -1095,7 +1102,7 @@ export default function TestResultsPage() {
                             <Label className="text-xs">
                               Value
                               {param.normalMinValue !== undefined &&
-                              param.normalMaxValue !== undefined
+                                param.normalMaxValue !== undefined
                                 ? ` (Normal: ${param.normalMinValue} - ${param.normalMaxValue})`
                                 : ""}
                             </Label>

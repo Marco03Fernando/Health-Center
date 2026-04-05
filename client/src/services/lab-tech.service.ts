@@ -156,3 +156,13 @@ export async function getAllLabBookings() {
   const res = await apiFetch(`/getallappointments`);
   return res?.data || (Array.isArray(res) ? res : []);
 }
+
+// PDF opening function
+
+export function openTestResultPdf(resultId) {
+  const baseUrl =
+    import.meta.env.VITE_API_URL ||
+    "http://localhost:8081/api";
+
+  window.open(`${baseUrl}/test-results/${resultId}/pdf`, "_blank");
+}
