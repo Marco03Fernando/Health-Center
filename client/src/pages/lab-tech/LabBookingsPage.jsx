@@ -122,9 +122,7 @@ export default function LabBookingsPage() {
   }
 
   function handleAddResult(booking) {
-    navigate(`/lab/test-results/new/${booking._id}`, {
-      state: { booking },
-    });
+    navigate(`/lab-tech/update-results?bookingId=${booking._id}`);
   }
 
   // FILTER
