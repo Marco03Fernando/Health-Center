@@ -10,6 +10,9 @@ router.get("/patient/:patientId", testResultController.getTestResultsByPatientId
 // PDF route
 router.get("/:id/pdf", testResultController.generateTestResultPdf);
 
+// WhatsApp resend route
+router.post("/:id/send-whatsapp", testResultController.sendTestResultWhatsApp);
+
 router.get("/:id", testResultController.getTestResultById);
 router.put("/:id", testResultController.updateTestResult);
 router.delete("/:id", testResultController.deleteTestResult);

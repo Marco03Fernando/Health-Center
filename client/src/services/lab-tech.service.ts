@@ -149,6 +149,13 @@ export async function updateTestResult(id, data) {
   return res?.data || res;
 }
 
+export async function sendTestResultWhatsApp(id) {
+  const res = await apiFetch(`/test-results/${id}/send-whatsapp`, {
+    method: "POST",
+  });
+  return res?.data || res;
+}
+
 // ─── Lab Bookings ─────────────────────────────────────────────────────────────
 
 // GET ALL BOOKINGS

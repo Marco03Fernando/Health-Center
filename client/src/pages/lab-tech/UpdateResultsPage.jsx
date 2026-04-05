@@ -8,6 +8,7 @@ import {
   getTestResults,
   updateTestResult,
   openTestResultPdf,
+  sendTestResultWhatsApp,
 } from "@/services/lab-tech.service";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -86,6 +87,7 @@ export default function TestResultsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [sendingWhatsAppId, setSendingWhatsAppId] = useState("");
 
   // add result dialog/form states
   const [selectedBooking, setSelectedBooking] = useState(null);
@@ -334,6 +336,18 @@ export default function TestResultsPage() {
       setSubmitError(err?.message || "Failed to create test result.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleResendWhatsApp(resultId) {
+    try {
+      setSendingWhatsAppId(resultId);
+      await sendTestResultWhatsApp(resultId);
+      alert("WhatsApp message sent successfully.");
+    } catch (err) {
+      alert(err?.message || "Failed to send WhatsApp message.");
+    } finally {
+      setSendingWhatsAppId("");
     }
   }
 
@@ -654,6 +668,20 @@ export default function TestResultsPage() {
                                 onClick={() => openTestResultPdf(r._id)}
                               >
                                 Open PDF
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => handleResendWhatsApp(r._id)}
+                                disabled={sendingWhatsAppId === r._id}
+                              >
+                                {sendingWhatsAppId === r._id ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Sending...
+                                  </>
+                                ) : (
+                                  "Resend WhatsApp"
+                                )}
                               </Button>
                             </div>
                           </div>

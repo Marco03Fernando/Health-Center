@@ -1,20 +1,155 @@
 const mongoose = require("mongoose");
 const PDFDocument = require("pdfkit");
-
 const TestResult = require("../../models/TestManagement/TestResult");
 const Booking = require("../../models/Appoinment");
 require("../../models/User");
 require("../../models/HealthCenter");
 require("../../models/DiagnosticTest");
 require("../../models/TestManagement/TestType");
+const sendWhatsApp = require("../../utils/sendWhatsapp");
 
 // Create new test result
 exports.createTestResult = async (req, res) => {
   try {
     const testResult = await TestResult.create(req.body);
-    res.status(201).json({ success: true, data: testResult });
+
+    const populatedResult = await TestResult.findById(testResult._id)
+      .populate("testTypeId")
+      .populate("patientId")
+      .populate({
+        path: "appointmentId",
+        populate: [
+          { path: "user" },
+          { path: "slot" },
+          { path: "diagnosticTest" },
+          { path: "healthCenter" },
+        ],
+      });
+
+    const patient = populatedResult.patientId || populatedResult.appointmentId?.user || {};
+    const testType = populatedResult.testTypeId || {};
+    const appointment = populatedResult.appointmentId || {};
+
+    // Send the whatsapp message about result creation
+    let phone = patient.phone || "";
+    if (phone && !phone.startsWith("+")) {
+      if (phone.startsWith("0")) {
+        phone = `+94${phone.substring(1)}`;
+      } else {
+        phone = `+94${phone}`;
+      }
+    }
+
+    if (phone) {
+      const patientName = patient.fullName || patient.name || "Patient";
+      const testName =
+        testType.name ||
+        appointment.diagnosticTest?.name ||
+        "lab test";
+
+      const centerName = appointment.healthCenter?.name || "Health Center";
+      const websiteLink = process.env.CLIENT_URL || "Website link coming soon";
+
+      const message =
+        `${centerName} - Laboratory Service
+
+      Dear ${patientName},
+
+      Your test result for ${testName} is now ready to view.
+      Please log in to the system to access your report.
+
+      Website: ${websiteLink}
+
+      Best regards,
+      ${centerName}`;
+
+      try {
+        await sendWhatsApp(phone, message);
+      } catch (whatsAppErr) {
+        console.error("WhatsApp send failed:", whatsAppErr.message);
+      }
+    } else {
+      console.warn("Patient phone number not found for WhatsApp notification.");
+    }
+
+    res.status(201).json({ success: true, data: populatedResult });
   } catch (err) {
+    console.error("createTestResult error:", err);
     res.status(400).json({ success: false, error: err.message });
+  }
+};
+
+//Resend Whatsapp message with the Resend Button
+exports.sendTestResultWhatsApp = async (req, res) => {
+  try {
+    const result = await TestResult.findById(req.params.id)
+      .populate("testTypeId")
+      .populate("patientId")
+      .populate({
+        path: "appointmentId",
+        populate: [
+          { path: "user" },
+          { path: "slot" },
+          { path: "diagnosticTest" },
+          { path: "healthCenter" },
+        ],
+      });
+
+    if (!result) {
+      return res.status(404).json({ success: false, error: "Test result not found" });
+    }
+
+    const patient = result.patientId || result.appointmentId?.user || {};
+    const testType = result.testTypeId || {};
+    const appointment = result.appointmentId || {};
+
+    let phone = patient.phone || "";
+    if (phone && !phone.startsWith("+")) {
+      if (phone.startsWith("0")) {
+        phone = `+94${phone.substring(1)}`;
+      } else {
+        phone = `+94${phone}`;
+      }
+    }
+
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        error: "Patient phone number not found",
+      });
+    }
+
+    const patientName = patient.fullName || patient.name || "Patient";
+    const testName =
+      testType.name ||
+      appointment.diagnosticTest?.name ||
+      "lab test";
+
+    const centerName = appointment.healthCenter?.name || "Health Center";
+    const websiteLink = process.env.CLIENT_URL || "Website link coming soon";
+
+    const message =
+      `Dear ${patientName},
+
+  Your test result for ${testName} is now ready to view.
+  Please log in to the system to access your report.
+
+  Website: ${websiteLink}
+
+  Best regards,
+  ${centerName} - Laboratory Service`;
+
+    const waResult = await sendWhatsApp(phone, message);
+
+    res.status(200).json({
+      success: true,
+      message: "WhatsApp sent successfully",
+      whatsappSid: waResult.sid,
+      whatsappStatus: waResult.status,
+    });
+  } catch (err) {
+    console.error("sendTestResultWhatsApp error:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
@@ -328,8 +463,8 @@ function drawModernResultTable(doc, rows, startY) {
     const bg = isAbnormal
       ? "#fef2f2"
       : index % 2 === 0
-      ? "#fcfcfd"
-      : "#f8fafc";
+        ? "#fcfcfd"
+        : "#f8fafc";
 
     doc
       .save()
