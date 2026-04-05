@@ -1,3 +1,4 @@
+/* noop */
 const MedicationInventory = require("../../models/pharmacy/medicationInventory");
 
 const createMedication = async (req, res) => {
