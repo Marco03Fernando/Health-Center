@@ -7,7 +7,7 @@ const batchSchema = new mongoose.Schema(
     quantity: { type: Number, required: true, min: 0 },
     unitPrice: { type: Number, default: 0, min: 0 },
 
-    addedById: { type: String, required: true, trim: true }, // pharmacist user _id as string
+    addedById: { type: String, required: true, trim: true },
     addedByName: { type: String, required: true, trim: true },
     addedByEmail: { type: String, default: "", trim: true },
     addedAt: { type: Date, default: Date.now },
@@ -36,7 +36,7 @@ const medicationInventorySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Virtual: totalQuantity = sum of all batch quantities
+
 medicationInventorySchema.virtual("totalQuantity").get(function () {
   return (this.batches || []).reduce((sum, b) => sum + (b.quantity || 0), 0);
 });

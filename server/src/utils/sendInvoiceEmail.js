@@ -40,11 +40,7 @@ const buildWaitingRowsHtml = (order) =>
     })
     .join("");
 
-/**
- * mode:
- * - "CONFIRMED" (default) => sends invoice bill
- * - "WAITING_STOCK" => sends waiting-stock notice with shortage table
- */
+
 const sendInvoiceEmail = async ({ to, order, mode = "CONFIRMED" }) => {
   const transporter = nodemailer.createTransport({
     service: "gmail",

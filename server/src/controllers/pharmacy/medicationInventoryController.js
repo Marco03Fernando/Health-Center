@@ -1,3 +1,4 @@
+/* noop */
 const MedicationInventory = require("../../models/pharmacy/medicationInventory");
 
 const createMedication = async (req, res) => {
@@ -66,13 +67,17 @@ const deleteMedication = async (req, res) => {
 
 const addBatch = async (req, res) => {
   try {
-    const { batchNo, expiryDate, quantity, unitPrice, addedById, addedByName, addedByEmail } = req.body;
+    const { batchNo, expiryDate, quantity, unitPrice } = req.body;
 
-    if (!batchNo || !expiryDate || quantity === undefined || !addedById || !addedByName) {
-      return res.status(400).json({
-        message: "batchNo, expiryDate, quantity, addedById, addedByName are required",
-      });
+    if (!batchNo || !expiryDate || quantity === undefined) {
+      return res.status(400).json({ message: "batchNo, expiryDate and quantity are required" });
     }
+
+    // derive actor from authenticated user/admin
+    const actor = req.user || req.admin || {};
+    const addedById = actor._id ? actor._id.toString() : (req.session && req.session.userId) || "";
+    const addedByName = actor.fullName || actor.name || "";
+    const addedByEmail = actor.email || "";
 
     const med = await MedicationInventory.findById(req.params.id);
     if (!med) return res.status(404).json({ message: "Medication not found" });
@@ -86,7 +91,7 @@ const addBatch = async (req, res) => {
 
       existing.addedById = addedById;
       existing.addedByName = addedByName;
-      existing.addedByEmail = addedByEmail || "";
+      existing.addedByEmail = addedByEmail;
       existing.addedAt = new Date();
     } else {
       med.batches.push({
@@ -96,7 +101,7 @@ const addBatch = async (req, res) => {
         unitPrice: unitPrice ?? 0,
         addedById,
         addedByName,
-        addedByEmail: addedByEmail || "",
+        addedByEmail,
       });
     }
 
@@ -111,7 +116,7 @@ const addBatch = async (req, res) => {
 const updateBatch = async (req, res) => {
   try {
     const { batchId } = req.params;
-    const { batchNo, expiryDate, quantity, unitPrice, addedById, addedByName, addedByEmail } = req.body;
+    const { batchNo, expiryDate, quantity, unitPrice } = req.body;
 
     const med = await MedicationInventory.findById(req.params.id);
     if (!med) return res.status(404).json({ message: "Medication not found" });
@@ -124,9 +129,15 @@ const updateBatch = async (req, res) => {
     if (quantity !== undefined) batch.quantity = quantity;
     if (unitPrice !== undefined) batch.unitPrice = unitPrice;
 
-    if (addedById !== undefined) batch.addedById = addedById;
-    if (addedByName !== undefined) batch.addedByName = addedByName;
-    if (addedByEmail !== undefined) batch.addedByEmail = addedByEmail;
+    // update addedBy from authenticated actor if present
+    const actor = req.user || req.admin || {};
+    const actorId = actor._id ? actor._id.toString() : (req.session && req.session.userId) || undefined;
+    const actorName = actor.fullName || actor.name || undefined;
+    const actorEmail = actor.email || undefined;
+
+    if (actorId) batch.addedById = actorId;
+    if (actorName) batch.addedByName = actorName;
+    if (actorEmail) batch.addedByEmail = actorEmail;
 
     await med.save();
     const updated = await MedicationInventory.findById(med._id);
