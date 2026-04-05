@@ -1,7 +1,8 @@
 const mongoose = require("mongoose");
 const TestResult = require("../../models/TestManagement/TestResult");
 const Booking = require("../../models/Appoinment");
-require("../../models/DiagnosticTest"); // register 'testType' model for populate
+require("../../models/DiagnosticTest");
+require("../../models/TestManagement/TestType");// register 'testType' model for populate
 
 // Create new test result
 exports.createTestResult = async (req, res) => {
@@ -27,11 +28,19 @@ exports.getAllTestResults = async (req, res) => {
     const filter = centerId ? { appointmentId: { $in: appointmentIds } } : {};
 
     const results = await TestResult.find(filter)
-      .populate("appointmentId")
+      .populate({
+        path: "appointmentId",
+        populate: [
+          { path: "user" },
+          { path: "slot" },
+          { path: "diagnosticTest" },
+        ],
+      })
       .populate("testTypeId");
 
     res.status(200).json({ success: true, data: results });
   } catch (err) {
+    console.error("getAllTestResults error:", err);
     res.status(400).json({ success: false, error: err.message });
   }
 };

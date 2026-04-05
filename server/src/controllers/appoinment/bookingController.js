@@ -296,9 +296,9 @@ async function getAllAppointmentsAdmin(req, res) {
     if (testId) filter.diagnosticTest = testId;
 
     const bookings = await Booking.find(filter)
-      .populate('user', 'name phone')
+      .populate('user', 'fullName email phone')
       .populate('healthCenter', 'name location')
-      .populate('diagnosticTest', 'testName price')
+      .populate('diagnosticTest', 'name price')
       .populate('slot', 'startTime endTime')
       .sort({ appointmentDate: -1 }); 
 

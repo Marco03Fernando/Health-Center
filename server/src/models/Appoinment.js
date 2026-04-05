@@ -28,8 +28,8 @@ const BookingSchema = new mongoose.Schema(
     },
     appointmentStatus: {
       type: String,
-      enum: ['CONFIRMED', 'CANCELLED', 'COMPLETED'],
-      default: 'CONFIRMED'
+      enum: ["PENDING", "UNDERGOING", "RESULT_PENDING", "COMPLETED", "CANCELLED"],
+      default: "PENDING"
     }
   },
   {

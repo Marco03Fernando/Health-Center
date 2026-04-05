@@ -1,288 +1,602 @@
 import { useEffect, useMemo, useState } from "react";
-import { getDiagnosticTests, updateDiagnosticTest, } from "@/services/lab-tech.service";
+import { getTestTypes, updateDiagnosticTest, deleteTestType } from "@/services/lab-tech.service";
 import { useLabTech } from "@/contexts/LabTechContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, } from "@/components/ui/dialog";
-import { FlaskConical, Search, Loader2, Pencil, AlertCircle, CheckCircle2, PlusCircle, } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  FlaskConical,
+  Search,
+  Loader2,
+  Pencil,
+  Trash2,
+  PlusCircle,
+  Eye,
+} from "lucide-react";
 import { Link } from "react-router-dom";
+
 export default function TestTypesPage() {
-    const { centerId } = useLabTech();
-    const [tests, setTests] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
-    const [search, setSearch] = useState("");
-    const [editTarget, setEditTarget] = useState(null);
-    // Edit form state
-    const [editName, setEditName] = useState("");
-    const [editDescription, setEditDescription] = useState("");
-    const [editInstructions, setEditInstructions] = useState("");
-    const [editIsActive, setEditIsActive] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [saveError, setSaveError] = useState("");
-    const [saveSuccess, setSaveSuccess] = useState(false);
-    useEffect(() => {
-        loadTests();
-    }, [centerId]);
-    async function loadTests() {
-        try {
-            setLoading(true);
-            setError("");
-            const data = await getDiagnosticTests(centerId || undefined);
-            setTests(data);
-        }
-        catch (err) {
-            setError(err?.message || "Failed to load diagnostic tests.");
-        }
-        finally {
-            setLoading(false);
-        }
-    }
-    function openEdit(test) {
-        setEditTarget(test);
-        setEditName(test.name);
-        setEditDescription(test.description || "");
-        setEditInstructions(test.instructions || "");
-        setEditIsActive(test.isActive);
-        setSaveError("");
-        setSaveSuccess(false);
-    }
-    function closeEdit() {
-        setEditTarget(null);
-        setSaveError("");
-        setSaveSuccess(false);
-    }
-    async function handleSave(e) {
-        e.preventDefault();
-        if (!editTarget)
-            return;
-        if (!editName.trim() || !editInstructions.trim()) {
-            setSaveError("Test name and preparation instructions are required.");
-            return;
-        }
-        try {
-            setSaving(true);
-            setSaveError("");
-            const updated = await updateDiagnosticTest(editTarget._id, {
-                name: editName.trim(),
-                description: editDescription.trim() || undefined,
-                instructions: editInstructions.trim(),
-                isActive: editIsActive,
-            });
-            setTests((prev) => prev.map((t) => (t._id === updated._id ? updated : t)));
-            setSaveSuccess(true);
-            setTimeout(closeEdit, 1000);
-        }
-        catch (err) {
-            setSaveError(err?.message || "Failed to update test.");
-        }
-        finally {
-            setSaving(false);
-        }
-    }
-    async function handleToggleActive(test) {
-        try {
-            const updated = await updateDiagnosticTest(test._id, {
-                isActive: !test.isActive,
-            });
-            setTests((prev) => prev.map((t) => (t._id === updated._id ? updated : t)));
-        }
-        catch (err) {
-            setError(err?.message || "Failed to update status.");
-        }
-    }
-    const filtered = useMemo(() => {
-        const q = search.toLowerCase();
-        if (!q)
-            return tests;
-        return tests.filter((t) => t.name.toLowerCase().includes(q) ||
-            (t.description || "").toLowerCase().includes(q));
-    }, [tests, search]);
-    const activeCount = tests.filter((t) => t.isActive).length;
-    return (<div className="space-y-8 p-1 md:p-2">
-      {/* Header */}
+  const { centerId } = useLabTech();
+
+  const [tests, setTests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  const [viewTarget, setViewTarget] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
+
+  // edit states
+  const [editTestCode, setEditTestCode] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editCategory, setEditCategory] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [editSampleTypes, setEditSampleTypes] = useState("");
+  const [editInstructions, setEditInstructions] = useState("");
+  const [editIsActive, setEditIsActive] = useState(true);
+  const [editParameters, setEditParameters] = useState([
+    { name: "", unit: "", normalMinValue: "", normalMaxValue: "" },
+  ]);
+
+  useEffect(() => {
+    loadTests();
+  }, [centerId]);
+
+  async function loadTests() {
+    setLoading(true);
+    const data = await getTestTypes(centerId);
+    setTests(data);
+    setLoading(false);
+  }
+
+  function openView(test) {
+    setViewTarget(test);
+  }
+
+  function closeView() {
+    setViewTarget(null);
+  }
+
+  function openEdit(test) {
+    setEditTarget(test);
+    setEditTestCode(test.testCode || "");
+    setEditName(test.name || "");
+    setEditDescription(test.description || "");
+    setEditCategory(test.category || "");
+    setEditPrice(test.price ?? "");
+    setEditSampleTypes(test.sampleTypes || "");
+    setEditInstructions(test.instructions || "");
+    setEditIsActive(!!test.isActive);
+    setEditParameters(
+      test.parameters?.length
+        ? test.parameters.map((p) => ({
+            _id: p._id,
+            name: p.name || "",
+            unit: p.unit || "",
+            normalMinValue: p.normalMinValue ?? "",
+            normalMaxValue: p.normalMaxValue ?? "",
+          }))
+        : [{ name: "", unit: "", normalMinValue: "", normalMaxValue: "" }]
+    );
+  }
+
+  function closeEdit() {
+    setEditTarget(null);
+  }
+
+  function handleEditParameterChange(index, field, value) {
+    const updated = [...editParameters];
+    updated[index][field] = value;
+    setEditParameters(updated);
+  }
+
+  function addEditParameter() {
+    setEditParameters([
+      ...editParameters,
+      { name: "", unit: "", normalMinValue: "", normalMaxValue: "" },
+    ]);
+  }
+
+  function removeEditParameter(index) {
+    const updated = editParameters.filter((_, i) => i !== index);
+    setEditParameters(
+      updated.length
+        ? updated
+        : [{ name: "", unit: "", normalMinValue: "", normalMaxValue: "" }]
+    );
+  }
+
+  async function handleSave(e) {
+    e.preventDefault();
+
+    const updated = await updateDiagnosticTest(editTarget._id, {
+      testCode: editTestCode.trim().toUpperCase(),
+      name: editName.trim(),
+      description: editDescription.trim(),
+      category: editCategory.trim(),
+      price: Number(editPrice),
+      sampleTypes: editSampleTypes.trim(),
+      instructions: editInstructions.trim(),
+      isActive: editIsActive,
+      parameters: editParameters.map((p) => ({
+        _id: p._id,
+        name: p.name.trim(),
+        unit: p.unit.trim(),
+        normalMinValue: Number(p.normalMinValue),
+        normalMaxValue: Number(p.normalMaxValue),
+      })),
+    });
+
+    setTests((prev) => prev.map((t) => (t._id === updated._id ? updated : t)));
+    closeEdit();
+  }
+
+  async function handleDelete(test) {
+    if (!window.confirm("Delete this test?")) return;
+
+    await deleteTestType(test._id);
+    setTests((prev) => prev.filter((t) => t._id !== test._id));
+  }
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+
+    return tests.filter((t) =>
+      [
+        t.name,
+        t.testCode,
+        t.description,
+        t.category,
+        t.sampleTypes,
+        t.instructions,
+      ]
+        .filter(Boolean)
+        .some((field) => field.toLowerCase().includes(q))
+    );
+  }, [tests, search]);
+
+  const activeTests = filtered.filter((t) => t.isActive);
+  const inactiveTests = filtered.filter((t) => !t.isActive);
+
+  return (
+    <div className="space-y-8 p-1 md:p-2">
+      {/* HEADER */}
       <div className="rounded-3xl border bg-gradient-to-br from-background to-muted/30 p-6 shadow-sm md:p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground">
-              <FlaskConical className="h-3.5 w-3.5"/>
+              <FlaskConical className="h-3.5 w-3.5" />
               Diagnostic Test Management
             </div>
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Test Types</h1>
-              <p className="mt-2 text-sm text-muted-foreground md:text-base">
+              <p className="mt-2 text-sm text-muted-foreground">
                 Manage all diagnostic tests available for booking.
               </p>
             </div>
           </div>
+
           <Link to="/lab-tech/add-test">
-            <Button className="rounded-xl shrink-0">
-              <PlusCircle className="mr-2 h-4 w-4"/>
+            <Button className="rounded-xl">
+              <PlusCircle className="mr-2 h-4 w-4" />
               Add Test
             </Button>
           </Link>
         </div>
 
+        {/* COUNTERS */}
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           {[
-            { label: "Total Tests", value: tests.length, color: "text-foreground" },
-            { label: "Active", value: activeCount, color: "text-success" },
-            { label: "Inactive", value: tests.length - activeCount, color: "text-muted-foreground" },
-        ].map(({ label, value, color }) => (<Card key={label} className="rounded-2xl border shadow-none">
+            { label: "Total Tests", value: tests.length },
+            { label: "Active", value: activeTests.length },
+            { label: "Inactive", value: inactiveTests.length },
+          ].map((item) => (
+            <Card key={item.label} className="rounded-2xl border shadow-none">
               <CardContent className="p-5">
-                <p className="text-sm text-muted-foreground">{label}</p>
-                <p className={`mt-2 text-2xl font-bold ${color}`}>
-                  {loading ? "--" : value}
+                <p className="text-sm text-muted-foreground">{item.label}</p>
+                <p className="mt-2 text-2xl font-bold">
+                  {loading ? "--" : item.value}
                 </p>
               </CardContent>
-            </Card>))}
+            </Card>
+          ))}
         </div>
       </div>
 
-      {error && (<div className="flex items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          <AlertCircle className="h-4 w-4 shrink-0"/>
-          {error}
-        </div>)}
+      {/* SEARCH */}
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-semibold">
+          {filtered.length} of {tests.length} tests
+        </h2>
 
-      {/* List */}
-      <Card className="rounded-3xl border shadow-sm">
-        <CardContent className="p-5 md:p-6">
-          <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold">All Diagnostic Tests</h2>
-              <p className="text-sm text-muted-foreground">
-                {filtered.length} of {tests.length} tests
-              </p>
-            </div>
-            <div className="relative w-full lg:max-w-xs">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"/>
-              <Input placeholder="Search tests…" className="h-11 rounded-xl pl-10" value={search} onChange={(e) => setSearch(e.target.value)}/>
+        <div className="relative w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="pl-10 rounded-xl"
+            placeholder="Search by name or test code..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* LIST */}
+      {loading ? (
+        <div className="flex justify-center py-10">
+          <Loader2 className="animate-spin" />
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* ACTIVE */}
+          <div>
+            <h3 className="mb-2 font-semibold">Active Tests</h3>
+            <div className="space-y-3">
+              {activeTests.map((test) => (
+                <TestCard
+                  key={test._id}
+                  test={test}
+                  openView={openView}
+                  openEdit={openEdit}
+                  handleDelete={handleDelete}
+                />
+              ))}
             </div>
           </div>
 
-          {loading ? (<div className="flex items-center justify-center rounded-2xl border border-dashed py-16 text-muted-foreground">
-              <Loader2 className="mr-2 h-5 w-5 animate-spin"/>
-              Loading tests…
-            </div>) : filtered.length === 0 ? (<div className="rounded-2xl border border-dashed p-10 text-center">
-              <FlaskConical className="mx-auto mb-3 h-8 w-8 text-muted-foreground"/>
-              <p className="text-sm font-medium">No diagnostic tests found</p>
-              <Link to="/lab-tech/add-test">
-                <Button variant="outline" size="sm" className="mt-4 rounded-xl">
-                  Add your first test
-                </Button>
-              </Link>
-            </div>) : (<div className="space-y-3">
-              {filtered.map((test) => (<Card key={test._id} className="rounded-2xl border shadow-none transition-all duration-200 hover:shadow-sm">
-                  <CardContent className="p-5">
-                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                      <div className="flex min-w-0 items-start gap-4">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
-                          <FlaskConical className="h-5 w-5 text-primary"/>
-                        </div>
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-base font-semibold">
-                              {test.name}
-                            </h3>
-                            <Badge variant="secondary" className={`rounded-full border px-3 py-1 text-[11px] ${test.isActive
-                    ? "border-success/20 bg-success/10 text-success"
-                    : "border-transparent bg-muted text-muted-foreground"}`}>
-                              {test.isActive ? "Active" : "Inactive"}
-                            </Badge>
-                          </div>
-                          {test.description && (<p className="text-sm text-muted-foreground line-clamp-2">
-                              {test.description}
-                            </p>)}
-                          {test.instructions && (<p className="text-xs text-muted-foreground line-clamp-1">
-                              <span className="font-medium">Prep:</span>{" "}
-                              {test.instructions}
-                            </p>)}
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <Button variant="outline" size="sm" className="rounded-xl" onClick={() => openEdit(test)}>
-                          <Pencil className="mr-1.5 h-3.5 w-3.5"/>
-                          Edit
-                        </Button>
-                        <Button variant="outline" size="sm" className={`rounded-xl ${test.isActive
-                    ? "border-destructive/30 text-destructive hover:text-destructive"
-                    : "border-success/30 text-success hover:text-success"}`} onClick={() => handleToggleActive(test)}>
-                          {test.isActive ? "Disable" : "Enable"}
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>))}
-            </div>)}
-        </CardContent>
-      </Card>
+          {/* INACTIVE */}
+          <div>
+            <h3 className="mb-2 font-semibold">Inactive Tests</h3>
+            <div className="space-y-3">
+              {inactiveTests.map((test) => (
+                <TestCard
+                  key={test._id}
+                  test={test}
+                  openView={openView}
+                  openEdit={openEdit}
+                  handleDelete={handleDelete}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* Edit Dialog */}
-      <Dialog open={!!editTarget} onOpenChange={(open) => !open && closeEdit()}>
-        <DialogContent className="max-w-lg rounded-3xl p-0 overflow-hidden">
-          <DialogHeader className="sticky top-0 z-10 border-b bg-background px-6 py-4">
-            <DialogTitle className="text-xl">Edit Diagnostic Test</DialogTitle>
-            <DialogDescription>
-              Update test details. Changes are visible to patients immediately.
-            </DialogDescription>
+      {/* VIEW MODAL */}
+      <Dialog open={!!viewTarget} onOpenChange={closeView}>
+        <DialogContent className="rounded-2xl max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>View Test</DialogTitle>
+            <DialogDescription>Complete test type details</DialogDescription>
           </DialogHeader>
-          {editTarget && (<form onSubmit={handleSave} className="max-h-[80vh] overflow-y-auto px-6 pb-6">
-              <div className="space-y-5 py-4">
-                {saveError && (<div className="flex items-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                    <AlertCircle className="h-4 w-4 shrink-0"/>
-                    {saveError}
-                  </div>)}
-                {saveSuccess && (<div className="flex items-center gap-2 rounded-2xl border border-success/30 bg-success/5 px-4 py-3 text-sm text-success">
-                    <CheckCircle2 className="h-4 w-4 shrink-0"/>
-                    Test updated successfully!
-                  </div>)}
 
-                <div className="space-y-2">
-                  <Label htmlFor="edit-name">
-                    Test Name <span className="text-destructive">*</span>
-                  </Label>
-                  <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} required className="h-11 rounded-xl"/>
+          {viewTarget && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-6 space-y-2">
+                  <Label>Test Code</Label>
+                  <Input value={viewTarget.testCode || ""} readOnly />
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit-description">Description</Label>
-                  <Textarea id="edit-description" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={3} className="resize-none rounded-xl"/>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit-instructions">
-                    Preparation Instructions{" "}
-                    <span className="text-destructive">*</span>
-                  </Label>
-                  <Textarea id="edit-instructions" value={editInstructions} onChange={(e) => setEditInstructions(e.target.value)} required rows={4} className="resize-none rounded-xl"/>
-                </div>
-
-                <div className="flex items-center justify-between rounded-2xl border bg-muted/20 p-4">
-                  <div>
-                    <p className="text-sm font-medium">Status</p>
-                    <p className="text-xs text-muted-foreground">
-                      {editIsActive ? "Active" : "Inactive"}
-                    </p>
-                  </div>
-                  <Switch checked={editIsActive} onCheckedChange={setEditIsActive}/>
-                </div>
-
-                <div className="flex justify-end gap-3 pt-2">
-                  <Button type="button" variant="outline" className="rounded-xl" onClick={closeEdit}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" className="rounded-xl" disabled={saving || saveSuccess}>
-                    {saving ? "Saving…" : "Save Changes"}
-                  </Button>
+                <div className="col-span-6 space-y-2">
+                  <Label>Test Name</Label>
+                  <Input value={viewTarget.name || ""} readOnly />
                 </div>
               </div>
-            </form>)}
+
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-6 space-y-2">
+                  <Label>Description</Label>
+                  <Textarea value={viewTarget.description || ""} readOnly rows={3} />
+                </div>
+                <div className="col-span-6 space-y-2">
+                  <Label>Category</Label>
+                  <Input value={viewTarget.category || ""} readOnly />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-6 space-y-2">
+                  <Label>Price</Label>
+                  <Input value={viewTarget.price ?? ""} readOnly />
+                </div>
+                <div className="col-span-6 space-y-2">
+                  <Label>Sample Types</Label>
+                  <Input value={viewTarget.sampleTypes || ""} readOnly />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Instructions</Label>
+                <Textarea value={viewTarget.instructions || ""} readOnly rows={4} />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <div>
+                  <Badge
+                    className={
+                      viewTarget.isActive
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }
+                  >
+                    {viewTarget.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label>Parameters</Label>
+                {viewTarget.parameters?.length ? (
+                  <div className="space-y-3">
+                    {viewTarget.parameters.map((param, index) => (
+                      <div
+                        key={param._id || index}
+                        className="grid grid-cols-12 gap-2 rounded-xl border p-3"
+                      >
+                        <div className="col-span-3">
+                          <Label className="text-xs text-muted-foreground">Name</Label>
+                          <Input value={param.name || ""} readOnly />
+                        </div>
+                        <div className="col-span-3">
+                          <Label className="text-xs text-muted-foreground">Unit</Label>
+                          <Input value={param.unit || ""} readOnly />
+                        </div>
+                        <div className="col-span-3">
+                          <Label className="text-xs text-muted-foreground">Min Value</Label>
+                          <Input value={param.normalMinValue ?? ""} readOnly />
+                        </div>
+                        <div className="col-span-3">
+                          <Label className="text-xs text-muted-foreground">Max Value</Label>
+                          <Input value={param.normalMaxValue ?? ""} readOnly />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No parameters available.</p>
+                )}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
-    </div>);
+
+      {/* EDIT MODAL */}
+      <Dialog open={!!editTarget} onOpenChange={closeEdit}>
+        <DialogContent className="rounded-2xl max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Test</DialogTitle>
+            <DialogDescription>Update all test details</DialogDescription>
+          </DialogHeader>
+
+          {editTarget && (
+            <form onSubmit={handleSave} className="space-y-6">
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-6 space-y-2">
+                  <Label htmlFor="editTestCode">Test Code</Label>
+                  <Input
+                    id="editTestCode"
+                    value={editTestCode}
+                    onChange={(e) => setEditTestCode(e.target.value)}
+                    placeholder="e.g. LPT001"
+                  />
+                </div>
+                <div className="col-span-6 space-y-2">
+                  <Label htmlFor="editName">Test Name</Label>
+                  <Input
+                    id="editName"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Enter test name"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-6 space-y-2">
+                  <Label htmlFor="editDescription">Description</Label>
+                  <Textarea
+                    id="editDescription"
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <div className="col-span-6 space-y-2">
+                  <Label htmlFor="editCategory">Category</Label>
+                  <Input
+                    id="editCategory"
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    placeholder="Enter category"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-6 space-y-2">
+                  <Label htmlFor="editPrice">Price</Label>
+                  <Input
+                    id="editPrice"
+                    type="number"
+                    value={editPrice}
+                    onChange={(e) => setEditPrice(e.target.value)}
+                    placeholder="Enter price"
+                  />
+                </div>
+                <div className="col-span-6 space-y-2">
+                  <Label htmlFor="editSampleTypes">Sample Types</Label>
+                  <Input
+                    id="editSampleTypes"
+                    value={editSampleTypes}
+                    onChange={(e) => setEditSampleTypes(e.target.value)}
+                    placeholder="e.g. Blood"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="editInstructions">Instructions</Label>
+                <Textarea
+                  id="editInstructions"
+                  value={editInstructions}
+                  onChange={(e) => setEditInstructions(e.target.value)}
+                  rows={4}
+                />
+              </div>
+
+              <div className="space-y-4">
+                <Label>Parameters</Label>
+
+                {editParameters.map((param, index) => (
+                  <div
+                    key={param._id || index}
+                    className="grid grid-cols-12 gap-2 items-end rounded-xl border p-3"
+                  >
+                    <div className="col-span-3 space-y-2">
+                      <Label className="text-xs">Parameter Name</Label>
+                      <Input
+                        value={param.name}
+                        onChange={(e) =>
+                          handleEditParameterChange(index, "name", e.target.value)
+                        }
+                        placeholder="Parameter name"
+                      />
+                    </div>
+
+                    <div className="col-span-3 space-y-2">
+                      <Label className="text-xs">Unit</Label>
+                      <Input
+                        value={param.unit}
+                        onChange={(e) =>
+                          handleEditParameterChange(index, "unit", e.target.value)
+                        }
+                        placeholder="Unit"
+                      />
+                    </div>
+
+                    <div className="col-span-2 space-y-2">
+                      <Label className="text-xs">Min Value</Label>
+                      <Input
+                        type="number"
+                        value={param.normalMinValue}
+                        onChange={(e) =>
+                          handleEditParameterChange(index, "normalMinValue", e.target.value)
+                        }
+                        placeholder="Min"
+                      />
+                    </div>
+
+                    <div className="col-span-2 space-y-2">
+                      <Label className="text-xs">Max Value</Label>
+                      <Input
+                        type="number"
+                        value={param.normalMaxValue}
+                        onChange={(e) =>
+                          handleEditParameterChange(index, "normalMaxValue", e.target.value)
+                        }
+                        placeholder="Max"
+                      />
+                    </div>
+
+                    <div className="col-span-2">
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="w-full"
+                        onClick={() => removeEditParameter(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-xl"
+                  onClick={addEditParameter}
+                >
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Add Parameter
+                </Button>
+              </div>
+
+              <div className="flex items-center justify-between rounded-2xl border bg-muted/20 p-4">
+                <div>
+                  <p className="text-sm font-medium">Status</p>
+                  <p className="text-xs text-muted-foreground">
+                    {editIsActive
+                      ? "Active — visible to patients for booking"
+                      : "Inactive — hidden from patient booking"}
+                  </p>
+                </div>
+                <Switch checked={editIsActive} onCheckedChange={setEditIsActive} />
+              </div>
+
+              <div className="flex gap-2">
+                <Button type="submit">Save</Button>
+                <Button type="button" variant="outline" onClick={closeEdit}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// CARD
+function TestCard({ test, openView, openEdit, handleDelete }) {
+  return (
+    <Card className="rounded-2xl border shadow-none hover:shadow-sm">
+      <CardContent className="p-5 flex justify-between gap-4">
+        <div>
+          <h3 className="font-semibold">
+            {test.name}{" "}
+            <span className="text-sm font-medium text-muted-foreground">
+              ({test.testCode || "N/A"})
+            </span>
+          </h3>
+          <p className="text-sm text-muted-foreground">{test.description}</p>
+          <p className="text-xs text-muted-foreground">Category: {test.category}</p>
+          <p className="text-xs text-muted-foreground">Sample: {test.sampleTypes}</p>
+
+          <Badge
+            className={
+              test.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+            }
+          >
+            {test.isActive ? "Active" : "Inactive"}
+          </Badge>
+        </div>
+
+        <div className="flex gap-2 items-start">
+          <Button size="sm" variant="outline" onClick={() => openView(test)}>
+            <Eye size={14} />
+          </Button>
+          <Button size="sm" onClick={() => openEdit(test)}>
+            <Pencil size={14} />
+          </Button>
+          <Button size="sm" variant="destructive" onClick={() => handleDelete(test)}>
+            <Trash2 size={14} />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
