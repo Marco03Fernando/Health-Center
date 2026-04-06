@@ -7,6 +7,10 @@ import {
   updateBookingStatus,
   getTestResults,
   updateTestResult,
+  openTestResultPdf,
+  sendTestResultWhatsApp,
+  sendTestResultEmail,
+  getCenters,
 } from "@/services/lab-tech.service";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,12 +40,9 @@ import {
   Search,
   Loader2,
   AlertCircle,
-  FlaskConical,
   ClipboardList,
   Calendar,
-  User,
   CheckCircle2,
-  Clock3,
 } from "lucide-react";
 
 const TABS = [
@@ -82,9 +83,13 @@ export default function TestResultsPage() {
   const [bookings, setBookings] = useState([]);
   const [testTypes, setTestTypes] = useState([]);
   const [testResults, setTestResults] = useState([]);
+  const [centers, setCenters] = useState([]);
+  const [centerFilter, setCenterFilter] = useState("all");
+  const [centersLoading, setCentersLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [sendingNotificationId, setSendingNotificationId] = useState("");
 
   // add result dialog/form states
   const [selectedBooking, setSelectedBooking] = useState(null);
@@ -114,20 +119,24 @@ export default function TestResultsPage() {
     try {
       setLoading(true);
       setError("");
+      setCentersLoading(true);
 
-      const [bookingsRes, testTypesRes, testResultsRes] = await Promise.all([
+      const [bookingsRes, testTypesRes, testResultsRes, centersRes] = await Promise.all([
         getAllLabBookings(),
         getTestTypes(),
         getTestResults(),
+        getCenters(),
       ]);
 
       setBookings(Array.isArray(bookingsRes) ? bookingsRes : []);
       setTestTypes(Array.isArray(testTypesRes) ? testTypesRes : []);
       setTestResults(Array.isArray(testResultsRes) ? testResultsRes : []);
+      setCenters(Array.isArray(centersRes) ? centersRes : []);
     } catch (err) {
       setError(err?.message || "Failed to load test result data.");
     } finally {
       setLoading(false);
+      setCentersLoading(false);
     }
   }
 
@@ -147,26 +156,35 @@ export default function TestResultsPage() {
     const q = search.trim().toLowerCase();
 
     return pendingResults.filter((b) => {
-      if (!q) return true;
-
       const patientName = (b?.user?.fullName || b?.user?.name || "").toLowerCase();
       const testName = (b?.diagnosticTest?.name || "").toLowerCase();
       const appointmentId = (b?._id || "").toLowerCase();
 
-      return (
+      const bookingCenterId =
+        b?.healthCenter?._id ||
+        b?.healthCenter ||
+        b?.centerId?._id ||
+        b?.centerId ||
+        "";
+
+      const matchSearch =
+        !q ||
         patientName.includes(q) ||
         testName.includes(q) ||
-        appointmentId.includes(q)
-      );
+        appointmentId.includes(q);
+
+      const matchCenter =
+        centerFilter === "all" ||
+        String(bookingCenterId) === String(centerFilter);
+
+      return matchSearch && matchCenter;
     });
-  }, [pendingResults, search]);
+  }, [pendingResults, search, centerFilter]);
 
   const filteredCompletedResults = useMemo(() => {
     const q = search.trim().toLowerCase();
 
     return completedResults.filter((r) => {
-      if (!q) return true;
-
       const patientName = (
         r?.appointmentId?.user?.fullName ||
         r?.appointmentId?.user?.name ||
@@ -176,13 +194,26 @@ export default function TestResultsPage() {
       const testName = (r?.testTypeId?.name || "").toLowerCase();
       const appointmentId = (r?.appointmentId?._id || "").toLowerCase();
 
-      return (
+      const resultCenterId =
+        r?.appointmentId?.healthCenter?._id ||
+        r?.appointmentId?.healthCenter ||
+        r?.appointmentId?.centerId?._id ||
+        r?.appointmentId?.centerId ||
+        "";
+
+      const matchSearch =
+        !q ||
         patientName.includes(q) ||
         testName.includes(q) ||
-        appointmentId.includes(q)
-      );
+        appointmentId.includes(q);
+
+      const matchCenter =
+        centerFilter === "all" ||
+        String(resultCenterId) === String(centerFilter);
+
+      return matchSearch && matchCenter;
     });
-  }, [completedResults, search]);
+  }, [completedResults, search, centerFilter]);
 
   function openResultDialog(booking) {
     setSelectedBooking(booking);
@@ -333,6 +364,50 @@ export default function TestResultsPage() {
       setSubmitError(err?.message || "Failed to create test result.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleSendNotification(resultId) {
+    try {
+      setSendingNotificationId(resultId);
+
+      const results = await Promise.allSettled([
+        sendTestResultWhatsApp(resultId),
+        sendTestResultEmail(resultId),
+      ]);
+
+      const whatsappOk = results[0].status === "fulfilled";
+      const emailOk = results[1].status === "fulfilled";
+
+      if (whatsappOk && emailOk) {
+        alert("WhatsApp and email sent successfully.");
+        return;
+      }
+
+      if (whatsappOk && !emailOk) {
+        const emailError =
+          results[1]?.reason?.message || "Email failed to send.";
+        alert(`WhatsApp sent successfully, but email failed.\n${emailError}`);
+        return;
+      }
+
+      if (!whatsappOk && emailOk) {
+        const whatsappError =
+          results[0]?.reason?.message || "WhatsApp failed to send.";
+        alert(`Email sent successfully, but WhatsApp failed.\n${whatsappError}`);
+        return;
+      }
+
+      const whatsappError =
+        results[0]?.reason?.message || "WhatsApp failed to send.";
+      const emailError =
+        results[1]?.reason?.message || "Email failed to send.";
+
+      alert(
+        `Both notifications failed.\nWhatsApp: ${whatsappError}\nEmail: ${emailError}`
+      );
+    } finally {
+      setSendingNotificationId("");
     }
   }
 
@@ -489,18 +564,35 @@ export default function TestResultsPage() {
         </div>
       )}
 
-      {/* SEARCH + TABS */}
+      {/* SEARCH + CENTER + TABS */}
       <Card>
         <CardContent className="space-y-4 p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="relative w-full lg:max-w-sm">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search by patient, test, or appointment ID..."
-                className="pl-10"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+            <div className="flex w-full flex-col gap-3 lg:max-w-2xl lg:flex-row">
+              <div className="relative w-full lg:max-w-sm">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search by patient, test, or appointment ID..."
+                  className="pl-10"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={centerFilter}
+                onChange={(e) => setCenterFilter(e.target.value)}
+              >
+                <option value="all">
+                  {centersLoading ? "Loading centers..." : "All Centers"}
+                </option>
+                {centers.map((center) => (
+                  <option key={center._id} value={center._id}>
+                    {center.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -528,7 +620,7 @@ export default function TestResultsPage() {
           {/* PENDING TAB */}
           {activeTab === "pending" && (
             <Card>
-              <CardContent className="p-5 space-y-5">
+              <CardContent className="space-y-5 p-5">
                 <div>
                   <h2 className="text-lg font-semibold">Pending Results</h2>
                   <p className="text-sm text-muted-foreground">
@@ -590,7 +682,7 @@ export default function TestResultsPage() {
           {/* COMPLETED TAB */}
           {activeTab === "completed" && (
             <Card>
-              <CardContent className="p-5 space-y-5">
+              <CardContent className="space-y-5 p-5">
                 <div>
                   <h2 className="text-lg font-semibold">Completed Results</h2>
                   <p className="text-sm text-muted-foreground">
@@ -626,7 +718,7 @@ export default function TestResultsPage() {
                                   <Calendar className="h-3.5 w-3.5" />
                                   {formatDate(
                                     r?.appointmentId?.slot?.slotDate ||
-                                      r?.appointmentId?.appointmentDate
+                                    r?.appointmentId?.appointmentDate
                                   )}
                                 </span>
                                 <Badge className={STATUS_STYLES.COMPLETED}>
@@ -648,6 +740,26 @@ export default function TestResultsPage() {
                               >
                                 Edit
                               </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => openTestResultPdf(r._id)}
+                              >
+                                Open PDF
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => handleSendNotification(r._id)}
+                                disabled={sendingNotificationId === r._id}
+                              >
+                                {sendingNotificationId === r._id ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Sending...
+                                  </>
+                                ) : (
+                                  "Send Notification"
+                                )}
+                              </Button>
                             </div>
                           </div>
                         </CardContent>
@@ -663,7 +775,7 @@ export default function TestResultsPage() {
 
       {/* ADD RESULT DIALOG */}
       <Dialog open={!!selectedBooking} onOpenChange={(open) => !open && closeResultDialog()}>
-        <DialogContent className="max-w-3xl rounded-3xl p-0 overflow-hidden">
+        <DialogContent className="max-w-3xl overflow-hidden rounded-3xl p-0">
           <DialogHeader className="border-b bg-background px-6 py-4">
             <DialogTitle className="text-xl">Add Test Result</DialogTitle>
             <DialogDescription>
@@ -691,7 +803,7 @@ export default function TestResultsPage() {
 
                 <div className="rounded-2xl border bg-muted/20 p-4">
                   <p className="mb-3 text-sm font-semibold">Appointment Summary</p>
-                  <div className="grid gap-3 sm:grid-cols-2 text-sm">
+                  <div className="grid gap-3 text-sm sm:grid-cols-2">
                     <div>
                       <p className="text-xs text-muted-foreground">Patient</p>
                       <p className="font-medium">
@@ -872,7 +984,7 @@ export default function TestResultsPage() {
 
       {/* VIEW RESULT DIALOG */}
       <Dialog open={!!viewingResult} onOpenChange={(open) => !open && closeViewDialog()}>
-        <DialogContent className="max-w-3xl rounded-3xl p-0 overflow-hidden">
+        <DialogContent className="max-w-3xl overflow-hidden rounded-3xl p-0">
           <DialogHeader className="border-b bg-background px-6 py-4">
             <DialogTitle className="text-xl">View Test Result</DialogTitle>
             <DialogDescription>
@@ -888,7 +1000,7 @@ export default function TestResultsPage() {
               <div className="space-y-6 py-4">
                 <div className="rounded-2xl border bg-muted/20 p-4">
                   <p className="mb-3 text-sm font-semibold">Appointment Details</p>
-                  <div className="grid gap-3 sm:grid-cols-2 text-sm">
+                  <div className="grid gap-3 text-sm sm:grid-cols-2">
                     <div>
                       <p className="text-xs text-muted-foreground">Patient</p>
                       <p className="font-medium">
@@ -914,7 +1026,7 @@ export default function TestResultsPage() {
                       <p className="font-medium">
                         {formatDate(
                           viewingResult?.appointmentId?.slot?.slotDate ||
-                            viewingResult?.appointmentId?.appointmentDate
+                          viewingResult?.appointmentId?.appointmentDate
                         )}
                       </p>
                     </div>
@@ -923,7 +1035,7 @@ export default function TestResultsPage() {
 
                 <div className="rounded-2xl border bg-muted/20 p-4">
                   <p className="mb-3 text-sm font-semibold">Result Details</p>
-                  <div className="grid gap-3 sm:grid-cols-2 text-sm">
+                  <div className="grid gap-3 text-sm sm:grid-cols-2">
                     <div>
                       <p className="text-xs text-muted-foreground">Condition</p>
                       <p className="font-medium">{viewingResult?.condition || "—"}</p>
@@ -969,7 +1081,7 @@ export default function TestResultsPage() {
 
                   <div className="mt-4">
                     <p className="text-xs text-muted-foreground">Notes</p>
-                    <p className="font-medium text-sm">
+                    <p className="text-sm font-medium">
                       {viewingResult?.notes || "—"}
                     </p>
                   </div>
@@ -977,7 +1089,7 @@ export default function TestResultsPage() {
 
                 <div className="rounded-2xl border bg-muted/20 p-4">
                   <p className="mb-3 text-sm font-semibold">Timestamps</p>
-                  <div className="grid gap-3 sm:grid-cols-2 text-sm">
+                  <div className="grid gap-3 text-sm sm:grid-cols-2">
                     <div>
                       <p className="text-xs text-muted-foreground">Created Time</p>
                       <p className="font-medium">
@@ -1006,7 +1118,7 @@ export default function TestResultsPage() {
 
       {/* EDIT RESULT DIALOG */}
       <Dialog open={!!editingResult} onOpenChange={(open) => !open && closeEditDialog()}>
-        <DialogContent className="max-w-3xl rounded-3xl p-0 overflow-hidden">
+        <DialogContent className="max-w-3xl overflow-hidden rounded-3xl p-0">
           <DialogHeader className="border-b bg-background px-6 py-4">
             <DialogTitle className="text-xl">Edit Test Result</DialogTitle>
             <DialogDescription>
@@ -1036,7 +1148,7 @@ export default function TestResultsPage() {
 
                 <div className="rounded-2xl border bg-muted/20 p-4">
                   <p className="mb-3 text-sm font-semibold">Appointment Details</p>
-                  <div className="grid gap-3 sm:grid-cols-2 text-sm">
+                  <div className="grid gap-3 text-sm sm:grid-cols-2">
                     <div>
                       <p className="text-xs text-muted-foreground">Patient</p>
                       <Input
@@ -1067,7 +1179,7 @@ export default function TestResultsPage() {
                       <Input
                         value={formatDate(
                           editingResult?.appointmentId?.slot?.slotDate ||
-                            editingResult?.appointmentId?.appointmentDate
+                          editingResult?.appointmentId?.appointmentDate
                         )}
                         readOnly
                       />
@@ -1163,7 +1275,7 @@ export default function TestResultsPage() {
 
                 <div className="rounded-2xl border bg-muted/20 p-4">
                   <p className="mb-3 text-sm font-semibold">Timestamps</p>
-                  <div className="grid gap-3 sm:grid-cols-2 text-sm">
+                  <div className="grid gap-3 text-sm sm:grid-cols-2">
                     <div>
                       <p className="text-xs text-muted-foreground">Created Time</p>
                       <Input

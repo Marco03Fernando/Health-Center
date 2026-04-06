@@ -149,10 +149,42 @@ export async function updateTestResult(id, data) {
   return res?.data || res;
 }
 
+export async function sendTestResultWhatsApp(id) {
+  const res = await apiFetch(`/test-results/${id}/send-whatsapp`, {
+    method: "POST",
+  });
+  return res?.data || res;
+}
+
+export async function sendTestResultEmail(id) {
+  const res = await apiFetch(`/test-results/${id}/send-email`, {
+    method: "POST",
+  });
+
+  return res;
+}
+
 // ─── Lab Bookings ─────────────────────────────────────────────────────────────
 
 // GET ALL BOOKINGS
 export async function getAllLabBookings() {
   const res = await apiFetch(`/getallappointments`);
+  return res?.data || (Array.isArray(res) ? res : []);
+}
+
+// PDF opening function
+
+export function openTestResultPdf(resultId) {
+  const baseUrl =
+    import.meta.env.VITE_API_URL ||
+    "http://localhost:8081/api";
+
+  window.open(`${baseUrl}/test-results/${resultId}/pdf`, "_blank");
+}
+
+// ─── Centers ─────────────────────────────────────────────────────────────
+
+export async function getCenters() {
+  const res = await apiFetch("/centers");
   return res?.data || (Array.isArray(res) ? res : []);
 }
