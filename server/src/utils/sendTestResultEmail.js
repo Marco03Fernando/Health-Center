@@ -8,7 +8,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-async function sendEmail({ to, subject, text, html }) {
+async function sendTestResultEmail({ to, subject, text, html }) {
   if (!to) {
     throw new Error("Recipient email is required");
   }
@@ -24,4 +24,4 @@ async function sendEmail({ to, subject, text, html }) {
   return transporter.sendMail(mailOptions);
 }
 
-module.exports = sendEmail;
+module.exports = sendTestResultEmail;

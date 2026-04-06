@@ -5,7 +5,7 @@ const client = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 
-const sendWhatsApp = async (to, message) => {
+const sendTestResultWhatsApp = async (to, message) => {
   const res = await client.messages.create({
     from: process.env.TWILIO_WHATSAPP_NUMBER,
     to: `whatsapp:${to}`,
@@ -17,4 +17,4 @@ const sendWhatsApp = async (to, message) => {
   return res;
 };
 
-module.exports = sendWhatsApp;
+module.exports = sendTestResultWhatsApp;

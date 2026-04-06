@@ -1,5 +1,5 @@
-const sendWhatsApp = require("./sendWhatsapp");
-const sendEmail = require("./sendEmail");
+const sendTestResultWhatsApp = require("./sendTestResultWhatsApp");
+const sendTestResultEmail = require("./sendTestResultEmail");
 
 function formatSriLankaPhone(phone = "") {
   let formatted = String(phone).trim();
@@ -159,7 +159,7 @@ async function notifyTestResultCreated(result, options = {}) {
   if (sendWhatsapp && content.patientPhone) {
     response.whatsapp.attempted = true;
     try {
-      const waResult = await sendWhatsApp(content.patientPhone, content.text);
+      const waResult = await sendTestResultWhatsApp(content.patientPhone, content.text);
       response.whatsapp.success = true;
       response.whatsapp.sid = waResult?.sid || null;
       response.whatsapp.status = waResult?.status || null;
@@ -172,7 +172,7 @@ async function notifyTestResultCreated(result, options = {}) {
   if (sendEmailNotification && content.patientEmail) {
     response.email.attempted = true;
     try {
-      const emailResult = await sendEmail({
+      const emailResult = await sendTestResultEmail({
         to: content.patientEmail,
         subject: content.subject,
         text: content.text,
