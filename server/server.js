@@ -38,5 +38,8 @@ app.use("/api/medication-inventory", medicationInventoryRoutes);
 const pharmacyOrderRoutes = require("./src/routes/pharmacy/pharmacyOrderRoutes");
 app.use("/api/pharmacy-orders", pharmacyOrderRoutes);
 
+const centerRoutes = require("./src/routes/doctorChanneling/centerRoutes");
+app.use("/api/centers", centerRoutes);
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}...`));

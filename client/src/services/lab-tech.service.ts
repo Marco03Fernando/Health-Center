@@ -181,3 +181,10 @@ export function openTestResultPdf(resultId) {
 
   window.open(`${baseUrl}/test-results/${resultId}/pdf`, "_blank");
 }
+
+// ─── Centers ─────────────────────────────────────────────────────────────
+
+export async function getCenters() {
+  const res = await apiFetch("/centers");
+  return res?.data || (Array.isArray(res) ? res : []);
+}

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAllLabBookings, updateBookingStatus } from "@/services/lab-tech.service";
+import {
+  getAllLabBookings,
+  updateBookingStatus,
+  getCenters,
+} from "@/services/lab-tech.service";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,10 +75,13 @@ export default function LabBookingsPage() {
   const navigate = useNavigate();
 
   const [bookings, setBookings] = useState([]);
+  const [centers, setCenters] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [centersLoading, setCentersLoading] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [centerFilter, setCenterFilter] = useState("all");
   const [cancelId, setCancelId] = useState(null);
   const [cancelling, setCancelling] = useState(false);
 
@@ -83,7 +90,7 @@ export default function LabBookingsPage() {
       setLoading(true);
       setError("");
       const data = await getAllLabBookings();
-      setBookings(data);
+      setBookings(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err?.message || "Failed to load lab bookings.");
     } finally {
@@ -91,8 +98,21 @@ export default function LabBookingsPage() {
     }
   }
 
+  async function fetchCenters() {
+    try {
+      setCentersLoading(true);
+      const data = await getCenters();
+      setCenters(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load centers:", err);
+    } finally {
+      setCentersLoading(false);
+    }
+  }
+
   useEffect(() => {
     fetchBookings();
+    fetchCenters();
   }, []);
 
   async function handleNextStatus(id, currentStatus) {
@@ -125,7 +145,6 @@ export default function LabBookingsPage() {
     navigate(`/lab-tech/update-results?bookingId=${booking._id}`);
   }
 
-  // FILTER
   const filtered = useMemo(() => {
     return bookings.filter((b) => {
       const q = search.trim().toLowerCase();
@@ -143,6 +162,13 @@ export default function LabBookingsPage() {
 
       const appointmentId = (b?._id || "").toLowerCase();
 
+      const bookingCenterId =
+        b?.healthCenter?._id ||
+        b?.healthCenter ||
+        b?.centerId?._id ||
+        b?.centerId ||
+        "";
+
       const matchSearch =
         !q ||
         patientName.includes(q) ||
@@ -153,24 +179,47 @@ export default function LabBookingsPage() {
         statusFilter === "all" ||
         normalizeStatus(b.appointmentStatus) === statusFilter;
 
-      return matchSearch && matchStatus;
-    });
-  }, [bookings, search, statusFilter]);
+      const matchCenter =
+        centerFilter === "all" ||
+        String(bookingCenterId) === String(centerFilter);
 
-  // COUNTS
-  const pendingCount = bookings.filter(
+      return matchSearch && matchStatus && matchCenter;
+    });
+  }, [bookings, search, statusFilter, centerFilter]);
+
+  const centerFilteredBookings = useMemo(() => {
+    return bookings.filter((b) => {
+      const bookingCenterId =
+        b?.healthCenter?._id ||
+        b?.healthCenter ||
+        b?.centerId?._id ||
+        b?.centerId ||
+        "";
+
+      return (
+        centerFilter === "all" ||
+        String(bookingCenterId) === String(centerFilter)
+      );
+    });
+  }, [bookings, centerFilter]);
+
+  const pendingCount = centerFilteredBookings.filter(
     (b) => normalizeStatus(b.appointmentStatus) === "PENDING"
   ).length;
-  const undergoingCount = bookings.filter(
+
+  const undergoingCount = centerFilteredBookings.filter(
     (b) => normalizeStatus(b.appointmentStatus) === "UNDERGOING"
   ).length;
-  const resultPendingCount = bookings.filter(
+
+  const resultPendingCount = centerFilteredBookings.filter(
     (b) => normalizeStatus(b.appointmentStatus) === "RESULT_PENDING"
   ).length;
-  const completedCount = bookings.filter(
+
+  const completedCount = centerFilteredBookings.filter(
     (b) => normalizeStatus(b.appointmentStatus) === "COMPLETED"
   ).length;
-  const cancelledCount = bookings.filter(
+
+  const cancelledCount = centerFilteredBookings.filter(
     (b) => normalizeStatus(b.appointmentStatus) === "CANCELLED"
   ).length;
 
@@ -206,23 +255,39 @@ export default function LabBookingsPage() {
       {/* FILTERS */}
       <Card>
         <CardContent className="space-y-4 p-5">
-          {/* SEARCH + ALL */}
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 md:flex-row">
             <Input
+              className="md:flex-1"
               placeholder="Search by patient, test, or appointment ID..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+
+            <select
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              value={centerFilter}
+              onChange={(e) => setCenterFilter(e.target.value)}
+            >
+              <option value="all">
+                {centersLoading ? "Loading centers..." : "All Centers"}
+              </option>
+              {centers.map((center) => (
+                <option key={center._id} value={center._id}>
+                  {center.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            
             <Button
               variant={statusFilter === "all" ? "default" : "outline"}
               onClick={() => setStatusFilter("all")}
             >
               All
             </Button>
-          </div>
 
-          {/* OTHER FILTERS BELOW */}
-          <div className="flex flex-wrap gap-2">
             {STATUS_FILTERS.map((f) => (
               <Button
                 key={f.value}
@@ -236,17 +301,39 @@ export default function LabBookingsPage() {
         </CardContent>
       </Card>
 
+      {/* ERROR */}
+      {error && (
+        <Card>
+          <CardContent className="p-4 text-sm text-red-600">
+            {error}
+          </CardContent>
+        </Card>
+      )}
+
       {/* LIST */}
       {loading ? (
-        <Loader2 className="animate-spin" />
+        <div className="flex justify-center py-10">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            No bookings found for the selected filters.
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-4">
           {filtered.map((b) => {
             const status = normalizeStatus(b.appointmentStatus);
 
+            const centerName =
+              b?.healthCenter?.name ||
+              b?.centerId?.name ||
+              "Unknown Center";
+
             return (
               <Card key={b._id}>
-                <CardContent className="flex items-center justify-between p-5">
+                <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
                   <div className="space-y-1">
                     <h3 className="text-base font-semibold">
                       {b.user?.fullName || b.user?.name || "Patient"}
@@ -254,6 +341,10 @@ export default function LabBookingsPage() {
 
                     <p className="text-sm font-medium text-muted-foreground">
                       {b.diagnosticTest?.name || "Diagnostic Test"}
+                    </p>
+
+                    <p className="text-xs text-muted-foreground">
+                      Center: {centerName}
                     </p>
 
                     <p className="text-xs text-muted-foreground">
@@ -269,8 +360,7 @@ export default function LabBookingsPage() {
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
-                    {/* NEXT STATUS */}
+                  <div className="flex flex-wrap gap-2">
                     {status === "PENDING" && (
                       <Button onClick={() => handleNextStatus(b._id, status)}>
                         Start
@@ -283,18 +373,17 @@ export default function LabBookingsPage() {
                       </Button>
                     )}
 
-                    {/* RESULT_PENDING => ADD RESULTS */}
                     {status === "RESULT_PENDING" && (
                       <Button onClick={() => handleAddResult(b)}>
                         Add Results
                       </Button>
                     )}
 
-                    {/* CANCEL */}
                     {status !== "COMPLETED" && status !== "CANCELLED" && (
                       <Button
                         variant="destructive"
                         onClick={() => setCancelId(b._id)}
+                        disabled={cancelling}
                       >
                         Cancel
                       </Button>
