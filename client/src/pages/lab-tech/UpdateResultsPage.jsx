@@ -9,6 +9,7 @@ import {
   updateTestResult,
   openTestResultPdf,
   sendTestResultWhatsApp,
+  sendTestResultEmail,
 } from "@/services/lab-tech.service";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -87,7 +88,7 @@ export default function TestResultsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-  const [sendingWhatsAppId, setSendingWhatsAppId] = useState("");
+  const [sendingNotificationId, setSendingNotificationId] = useState("");
 
   // add result dialog/form states
   const [selectedBooking, setSelectedBooking] = useState(null);
@@ -339,15 +340,47 @@ export default function TestResultsPage() {
     }
   }
 
-  async function handleResendWhatsApp(resultId) {
+  async function handleSendNotification(resultId) {
     try {
-      setSendingWhatsAppId(resultId);
-      await sendTestResultWhatsApp(resultId);
-      alert("WhatsApp message sent successfully.");
-    } catch (err) {
-      alert(err?.message || "Failed to send WhatsApp message.");
+      setSendingNotificationId(resultId);
+
+      const results = await Promise.allSettled([
+        sendTestResultWhatsApp(resultId),
+        sendTestResultEmail(resultId),
+      ]);
+
+      const whatsappOk = results[0].status === "fulfilled";
+      const emailOk = results[1].status === "fulfilled";
+
+      if (whatsappOk && emailOk) {
+        alert("WhatsApp and email sent successfully.");
+        return;
+      }
+
+      if (whatsappOk && !emailOk) {
+        const emailError =
+          results[1]?.reason?.message || "Email failed to send.";
+        alert(`WhatsApp sent successfully, but email failed.\n${emailError}`);
+        return;
+      }
+
+      if (!whatsappOk && emailOk) {
+        const whatsappError =
+          results[0]?.reason?.message || "WhatsApp failed to send.";
+        alert(`Email sent successfully, but WhatsApp failed.\n${whatsappError}`);
+        return;
+      }
+
+      const whatsappError =
+        results[0]?.reason?.message || "WhatsApp failed to send.";
+      const emailError =
+        results[1]?.reason?.message || "Email failed to send.";
+
+      alert(
+        `Both notifications failed.\nWhatsApp: ${whatsappError}\nEmail: ${emailError}`
+      );
     } finally {
-      setSendingWhatsAppId("");
+      setSendingNotificationId("");
     }
   }
 
@@ -671,16 +704,16 @@ export default function TestResultsPage() {
                               </Button>
                               <Button
                                 variant="outline"
-                                onClick={() => handleResendWhatsApp(r._id)}
-                                disabled={sendingWhatsAppId === r._id}
+                                onClick={() => handleSendNotification(r._id)}
+                                disabled={sendingNotificationId === r._id}
                               >
-                                {sendingWhatsAppId === r._id ? (
+                                {sendingNotificationId === r._id ? (
                                   <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                     Sending...
                                   </>
                                 ) : (
-                                  "Resend WhatsApp"
+                                  "Send Notification"
                                 )}
                               </Button>
                             </div>

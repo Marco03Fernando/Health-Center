@@ -156,6 +156,14 @@ export async function sendTestResultWhatsApp(id) {
   return res?.data || res;
 }
 
+export async function sendTestResultEmail(id) {
+  const res = await apiFetch(`/test-results/${id}/send-email`, {
+    method: "POST",
+  });
+
+  return res;
+}
+
 // ─── Lab Bookings ─────────────────────────────────────────────────────────────
 
 // GET ALL BOOKINGS

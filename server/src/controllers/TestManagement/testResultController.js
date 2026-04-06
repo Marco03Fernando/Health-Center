@@ -6,149 +6,139 @@ require("../../models/User");
 require("../../models/HealthCenter");
 require("../../models/DiagnosticTest");
 require("../../models/TestManagement/TestType");
-const sendWhatsApp = require("../../utils/sendWhatsapp");
+
+const {
+  notifyTestResultCreated,
+  buildResultNotificationContent,
+} = require("../../utils/testResultNotification");
+
+// ---------- COMMON HELPERS ----------
+
+async function getPopulatedTestResultById(id) {
+  return TestResult.findById(id)
+    .populate("testTypeId")
+    .populate("patientId")
+    .populate({
+      path: "appointmentId",
+      populate: [
+        { path: "user" },
+        { path: "slot" },
+        { path: "diagnosticTest" },
+        { path: "healthCenter" },
+      ],
+    });
+}
 
 // Create new test result
 exports.createTestResult = async (req, res) => {
   try {
     const testResult = await TestResult.create(req.body);
 
-    const populatedResult = await TestResult.findById(testResult._id)
-      .populate("testTypeId")
-      .populate("patientId")
-      .populate({
-        path: "appointmentId",
-        populate: [
-          { path: "user" },
-          { path: "slot" },
-          { path: "diagnosticTest" },
-          { path: "healthCenter" },
-        ],
+    const populatedResult = await getPopulatedTestResultById(testResult._id);
+
+    if (!populatedResult) {
+      return res.status(404).json({
+        success: false,
+        error: "Created test result could not be loaded",
       });
-
-    const patient = populatedResult.patientId || populatedResult.appointmentId?.user || {};
-    const testType = populatedResult.testTypeId || {};
-    const appointment = populatedResult.appointmentId || {};
-
-    // Send the whatsapp message about result creation
-    let phone = patient.phone || "";
-    if (phone && !phone.startsWith("+")) {
-      if (phone.startsWith("0")) {
-        phone = `+94${phone.substring(1)}`;
-      } else {
-        phone = `+94${phone}`;
-      }
     }
 
-    if (phone) {
-      const patientName = patient.fullName || patient.name || "Patient";
-      const testName =
-        testType.name ||
-        appointment.diagnosticTest?.name ||
-        "lab test";
+    const notifications = await notifyTestResultCreated(populatedResult, {
+      sendWhatsapp: true,
+      sendEmailNotification: true,
+    });
 
-      const centerName = appointment.healthCenter?.name || "Health Center";
-      const websiteLink = process.env.CLIENT_URL || "Website link coming soon";
-
-      const message =
-        `${centerName} - Laboratory Service
-
-      Dear ${patientName},
-
-      Your test result for ${testName} is now ready to view.
-      Please log in to the system to access your report.
-
-      Website: ${websiteLink}
-
-      Best regards,
-      ${centerName}`;
-
-      try {
-        await sendWhatsApp(phone, message);
-      } catch (whatsAppErr) {
-        console.error("WhatsApp send failed:", whatsAppErr.message);
-      }
-    } else {
-      console.warn("Patient phone number not found for WhatsApp notification.");
-    }
-
-    res.status(201).json({ success: true, data: populatedResult });
+    res.status(201).json({
+      success: true,
+      message: "Test result created successfully",
+      data: populatedResult,
+      notifications,
+    });
   } catch (err) {
     console.error("createTestResult error:", err);
     res.status(400).json({ success: false, error: err.message });
   }
 };
 
-//Resend Whatsapp message with the Resend Button
+// Resend WhatsApp message
 exports.sendTestResultWhatsApp = async (req, res) => {
   try {
-    const result = await TestResult.findById(req.params.id)
-      .populate("testTypeId")
-      .populate("patientId")
-      .populate({
-        path: "appointmentId",
-        populate: [
-          { path: "user" },
-          { path: "slot" },
-          { path: "diagnosticTest" },
-          { path: "healthCenter" },
-        ],
-      });
+    const result = await getPopulatedTestResultById(req.params.id);
 
     if (!result) {
       return res.status(404).json({ success: false, error: "Test result not found" });
     }
 
-    const patient = result.patientId || result.appointmentId?.user || {};
-    const testType = result.testTypeId || {};
-    const appointment = result.appointmentId || {};
+    const content = buildResultNotificationContent(result);
 
-    let phone = patient.phone || "";
-    if (phone && !phone.startsWith("+")) {
-      if (phone.startsWith("0")) {
-        phone = `+94${phone.substring(1)}`;
-      } else {
-        phone = `+94${phone}`;
-      }
-    }
-
-    if (!phone) {
+    if (!content.patientPhone) {
       return res.status(400).json({
         success: false,
         error: "Patient phone number not found",
       });
     }
 
-    const patientName = patient.fullName || patient.name || "Patient";
-    const testName =
-      testType.name ||
-      appointment.diagnosticTest?.name ||
-      "lab test";
+    const notificationResult = await notifyTestResultCreated(result, {
+      sendWhatsapp: true,
+      sendEmailNotification: false,
+    });
 
-    const centerName = appointment.healthCenter?.name || "Health Center";
-    const websiteLink = process.env.CLIENT_URL || "Website link coming soon";
-
-    const message =
-      `Dear ${patientName},
-
-  Your test result for ${testName} is now ready to view.
-  Please log in to the system to access your report.
-
-  Website: ${websiteLink}
-
-  Best regards,
-  ${centerName} - Laboratory Service`;
-
-    const waResult = await sendWhatsApp(phone, message);
+    if (!notificationResult.whatsapp.success) {
+      return res.status(500).json({
+        success: false,
+        error: notificationResult.whatsapp.error || "Failed to send WhatsApp",
+      });
+    }
 
     res.status(200).json({
       success: true,
       message: "WhatsApp sent successfully",
-      whatsappSid: waResult.sid,
-      whatsappStatus: waResult.status,
+      whatsappSid: notificationResult.whatsapp.sid,
+      whatsappStatus: notificationResult.whatsapp.status,
     });
   } catch (err) {
     console.error("sendTestResultWhatsApp error:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+// Resend Email message
+exports.sendTestResultEmail = async (req, res) => {
+  try {
+    const result = await getPopulatedTestResultById(req.params.id);
+
+    if (!result) {
+      return res.status(404).json({ success: false, error: "Test result not found" });
+    }
+
+    const content = buildResultNotificationContent(result);
+
+    if (!content.patientEmail) {
+      return res.status(400).json({
+        success: false,
+        error: "Patient email not found",
+      });
+    }
+
+    const notificationResult = await notifyTestResultCreated(result, {
+      sendWhatsapp: false,
+      sendEmailNotification: true,
+    });
+
+    if (!notificationResult.email.success) {
+      return res.status(500).json({
+        success: false,
+        error: notificationResult.email.error || "Failed to send email",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Email sent successfully",
+      emailMessageId: notificationResult.email.messageId,
+    });
+  } catch (err) {
+    console.error("sendTestResultEmail error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -189,18 +179,7 @@ exports.getAllTestResults = async (req, res) => {
 // Get test result by ID
 exports.getTestResultById = async (req, res) => {
   try {
-    const result = await TestResult.findById(req.params.id)
-      .populate("testTypeId")
-      .populate("patientId")
-      .populate({
-        path: "appointmentId",
-        populate: [
-          { path: "user" },
-          { path: "slot" },
-          { path: "diagnosticTest" },
-          { path: "healthCenter" },
-        ],
-      });
+    const result = await getPopulatedTestResultById(req.params.id);
 
     if (!result) {
       return res.status(404).json({ success: false, error: "Not found" });
@@ -516,18 +495,7 @@ function drawModernResultTable(doc, rows, startY) {
 
 exports.generateTestResultPdf = async (req, res) => {
   try {
-    const result = await TestResult.findById(req.params.id)
-      .populate("testTypeId")
-      .populate("patientId")
-      .populate({
-        path: "appointmentId",
-        populate: [
-          { path: "user" },
-          { path: "slot" },
-          { path: "diagnosticTest" },
-          { path: "healthCenter" },
-        ],
-      });
+    const result = await getPopulatedTestResultById(req.params.id);
 
     if (!result) {
       return res.status(404).json({ success: false, error: "Test result not found" });
@@ -552,7 +520,6 @@ exports.generateTestResultPdf = async (req, res) => {
 
     doc.pipe(res);
 
-    // Page background accents
     doc
       .rect(0, 0, 595, 26)
       .fill("#0f766e");
@@ -561,7 +528,6 @@ exports.generateTestResultPdf = async (req, res) => {
       .rect(0, 26, 595, 6)
       .fill("#99f6e4");
 
-    // Header
     doc
       .font("Helvetica-Bold")
       .fontSize(21)
@@ -614,7 +580,6 @@ exports.generateTestResultPdf = async (req, res) => {
       .strokeColor("#cbd5e1")
       .stroke();
 
-    // Summary badges
     let badgeY = 140;
     let bx = 50;
     bx += drawBadge(doc, "Condition", result.condition || "unknown", bx, badgeY, "#1d4ed8") + 10;
@@ -630,12 +595,11 @@ exports.generateTestResultPdf = async (req, res) => {
 
     let y = 178;
 
-    // Two-column cards
     const leftCardHeight = drawDetailCard(
       doc,
       "Patient Information",
       [
-        { label: "Full Name", value: patient.fullName || "—" },
+        { label: "Full Name", value: patient.fullName || patient.name || "—" },
         { label: "Phone", value: patient.phone || "—" },
         { label: "Email", value: patient.email || "—" },
       ],
@@ -659,7 +623,6 @@ exports.generateTestResultPdf = async (req, res) => {
 
     y += Math.max(leftCardHeight, rightCardHeight) + 20;
 
-    // Test info
     y = drawSectionHeader(doc, "Test Information", y);
     const testInfoHeight = drawSummaryCard(doc, "Test Details", [
       { label: "Test Name", value: testType.name || "—" },
@@ -685,7 +648,6 @@ exports.generateTestResultPdf = async (req, res) => {
 
     y += 78;
 
-    // Result summary
     y = drawSectionHeader(doc, "Result Summary", y);
     const summaryHeight = drawSummaryCard(doc, "Clinical Summary", [
       { label: "Condition", value: result.condition || "—" },
@@ -699,11 +661,9 @@ exports.generateTestResultPdf = async (req, res) => {
 
     y = ensureSpace(doc, y, 160);
 
-    // Table
     y = drawSectionHeader(doc, "Test Result Details", y);
     y = drawModernResultTable(doc, result.results || [], y + 6);
 
-    // Footer
     y = ensureSpace(doc, y, 90);
     y += 20;
 
