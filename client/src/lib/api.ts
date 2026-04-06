@@ -75,3 +75,35 @@ export async function labTechApiFetch(endpoint: string, options: RequestInit = {
 
   return data;
 }
+
+/**
+ * Isolated fetch for the Pharmacy portal.
+ * ONLY reads `pharmacy_token` — never picks up other portals' credentials.
+ */
+export async function pharmacyApiFetch(endpoint: string, options: RequestInit = {}) {
+  const token = localStorage.getItem("pharmacy_token") || null;
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+
+  let data: any = null;
+
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.message || `Request failed: ${response.status}`);
+  }
+
+  return data;
+}
