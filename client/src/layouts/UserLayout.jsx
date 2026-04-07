@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 const navItems = [
     { to: "/user", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/user/consult", label: "Consult", icon: Stethoscope },
+    { to: "/user/consult", label: "Consultation", icon: Stethoscope },
     { to: "/user/appointments", label: "Appointments", icon: CalendarCheck },
     { to: "/user/lab-bookings", label: "Lab Bookings", icon: FlaskConical },
     { to: "/user/prescriptions", label: "Prescriptions", icon: FileText },
