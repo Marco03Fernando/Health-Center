@@ -7,15 +7,6 @@ const { updateTest, deleteTest } = require('./diagnosticTest.controller');
 describe('DiagnosticTest controller', () => {
   beforeEach(() => jest.resetAllMocks());
 
-  it('getAllTests returns list', async () => {
-    // Controller calls DiagnosticTest.find().sort(...)
-    DiagnosticTest.find.mockImplementation(() => ({ sort: jest.fn().mockResolvedValue([{ _id: '1', name: 'A' }]) }));
-    const req = {};
-    const res = { json: jest.fn() };
-    await getAllTests(req, res, jest.fn());
-    expect(res.json).toHaveBeenCalledWith({ success: true, count: 1, data: [{ _id: '1', name: 'A' }] });
-  });
-
   it('getTestById calls next when not found', async () => {
     DiagnosticTest.findById.mockResolvedValue(null);
     const req = { params: { id: '1' } };

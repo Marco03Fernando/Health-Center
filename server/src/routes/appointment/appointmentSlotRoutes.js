@@ -9,7 +9,7 @@ const {
   deleteAppointmentSlot,
   deleteExpiredUnbookedSlots,
   deleteUpcomingUnbookedSlots
-} = require('../controllers/appoinment/appointmentSlotsController');
+} = require('../../controllers/appoinment/appointmentSlotsController');
 
 
 router.post('/api/generateSlots', generateAppointmentSlots);

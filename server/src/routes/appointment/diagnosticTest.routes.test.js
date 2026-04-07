@@ -2,8 +2,8 @@ const request = require('supertest');
 const express = require('express');
 
 // Mock the model used by controller
-jest.mock('../controllers/appoinment/diagnosticTest.controller', () => {
-  const original = jest.requireActual('../controllers/appoinment/diagnosticTest.controller');
+jest.mock('../../controllers/appoinment/diagnosticTest.controller', () => {
+  const original = jest.requireActual('../../controllers/appoinment/diagnosticTest.controller');
   return {
     ...original,
     getAllTests: (req, res) => res.json({ success: true, count: 1, data: [{ _id: '1' }] }),

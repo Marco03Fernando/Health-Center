@@ -85,6 +85,14 @@ const DiagnosticTestSchema = new mongoose.Schema(
   }
 );
 
+// Auto-generate testCode before validation when not provided
+DiagnosticTestSchema.pre('validate', async function () {
+  if (!this.testCode) {
+    const suffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+    this.testCode = `DT-${suffix}`;
+  }
+});
+
 // Use same collection (no change)
 const DiagnosticTest = mongoose.model('testType', DiagnosticTestSchema);
 

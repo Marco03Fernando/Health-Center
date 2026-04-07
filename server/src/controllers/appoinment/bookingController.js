@@ -177,7 +177,7 @@ async function updateAppointment(req, res) {
 
     return res.status(200).json({ 
       success: true, 
-      message: `Appointment ${status.toLowerCase()} successfully`, 
+      message: status ? `Appointment ${status.toLowerCase()} successfully` : 'Appointment updated successfully', 
       data: booking 
     });
 
