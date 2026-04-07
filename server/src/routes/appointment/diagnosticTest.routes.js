@@ -6,7 +6,7 @@ const {
   createTest,
   updateTest,
   deleteTest,
-} = require("../controllers/appoinment/diagnosticTest.controller");
+} = require("../../controllers/appoinment/diagnosticTest.controller");
 
 // Public routes
 router.get("/", getAllTests);

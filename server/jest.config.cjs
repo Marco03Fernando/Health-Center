@@ -3,6 +3,7 @@ module.exports = {
   testMatch: ['**/?(*.)+(spec|test).[jt]s?(x)'],
   verbose: true,
   rootDir: '.',
+  forceExit: true,
   collectCoverage: false,
   collectCoverageFrom: [
     'src/**/*.js',

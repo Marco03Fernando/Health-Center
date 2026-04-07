@@ -38,9 +38,9 @@ const medicationInventoryRoutes = require("./routes/pharmacy/medicationInventory
 const pharmacyOrderRoutes = require("./routes/pharmacy/pharmacyOrderRoutes");
 
 // Lab booking routes (diagnostic tests, appointment slots, bookings)
-const diagnosticTestRoutes = require("./routes/diagnosticTest.routes");
-const labAppointmentRoutes = require("./routes/appointmentRoutes");
-const labSlotRoutes = require("./routes/appointmentSlotRoutes");
+const diagnosticTestRoutes = require("./routes/appointment/diagnosticTest.routes");
+const labAppointmentRoutes = require("./routes/appointment/appointmentRoutes");
+const labSlotRoutes = require("./routes/appointment/appointmentSlotRoutes");
 
 // models needed for auto slot maintenance
 const Doctor = require("./models/doctorChanneling/doctor.model");
