@@ -19,6 +19,8 @@ const statusConfig = {
     pending_review: { label: "Pending Review", className: "bg-warning/15 text-warning border-warning/20" },
     approved: { label: "Approved", className: "bg-success/15 text-success border-success/20" },
     rejected: { label: "Rejected", className: "bg-destructive/15 text-destructive border-destructive/20" },
+    // Pharmacy
+    waiting_stock: { label: "Waiting stock", className: "bg-warning/15 text-warning border-warning/20" },
 };
 export const StatusBadge = ({ status }) => {
     const config = statusConfig[status] ?? { label: status, className: "bg-muted text-muted-foreground" };

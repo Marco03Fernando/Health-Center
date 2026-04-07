@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, FileText, Download, ShoppingBag } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { toast } from "sonner";
 function getArrayFromResponse(data) {
     if (Array.isArray(data))
         return data;
@@ -48,13 +49,18 @@ function mapPrescription(rx) {
 }
 const PrescriptionDetail = ({ rx, onBack, }) => {
     const navigate = useNavigate();
-    const handleOrderMedicines = () => {
-        navigate("/user/marketplace", {
-            state: {
-                fromPrescription: rx.id,
-                medicines: rx.medicines.map((m) => m.name),
-            },
+    const handleOrderMedicines = async () => {
+      try {
+        await apiFetch("/pharmacy-orders/from-prescription", {
+          method: "POST",
+          body: JSON.stringify({ prescriptionId: rx.id }),
         });
+
+        toast.success("Order placed. Pharmacist will prepare your medicines.");
+      } catch (err) {
+        console.error(err);
+        toast.error(err?.message || "Failed to place order");
+      }
     };
     const handleDownloadPdf = async () => {
         try {
