@@ -54,6 +54,8 @@ const pharmacyOrderSchema = new mongoose.Schema(
     },
 
     prescriptionTextSnapshot: { type: String, required: true },
+    // Reference back to the originating prescription (if any)
+    prescriptionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Prescription', required: false },
 
     status: {
       type: String,

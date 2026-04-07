@@ -53,6 +53,8 @@ export default function MedicationInventoryPage() {
   const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
 
   useEffect(() => {
     setLoading(true);
@@ -75,6 +77,21 @@ export default function MedicationInventoryPage() {
     });
     return { total: meds.length, lowStock, batches };
   }, [meds]);
+
+  const filteredMeds = useMemo(() => {
+    const q = (search || "").toLowerCase().trim();
+    return meds.filter((m) => {
+      if (filter === "lowstock") {
+        const totalQty = m.totalQuantity ?? (Array.isArray(m.batches) ? m.batches.reduce((s, b) => s + (b.quantity || 0), 0) : 0);
+        if (totalQty > 10) return false;
+      }
+      if (!q) return true;
+      if ((m.name || "").toLowerCase().includes(q)) return true;
+      if ((m.brandName || "").toLowerCase().includes(q)) return true;
+      if ((m.strength || "").toLowerCase().includes(q)) return true;
+      return false;
+    });
+  }, [meds, search, filter]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -137,6 +154,20 @@ export default function MedicationInventoryPage() {
       quantity: Number(row.querySelector('[data-field="quantity"]').value || 0),
       unitPrice: Number(row.querySelector('[data-field="unitPrice"]').value || 0),
     };
+    // Validate expiry date is in the future
+    try {
+      const expiry = new Date(payload.expiryDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      expiry.setHours(0, 0, 0, 0);
+      if (!(expiry > today)) {
+        toast.error('Expiry date must be in the future');
+        return;
+      }
+    } catch (e) {
+      toast.error('Invalid expiry date');
+      return;
+    }
     try {
       const updated = await pharmacyApiFetch(
         `/medication-inventory/${medId}/batches/${batchId}`,
@@ -173,6 +204,20 @@ export default function MedicationInventoryPage() {
 
     if (!batchNo || !expiryDate || quantity === 0) {
       toast.error("batchNo, expiryDate, and quantity are required");
+      return;
+    }
+    // Validate expiry date is in the future
+    try {
+      const expiry = new Date(expiryDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      expiry.setHours(0, 0, 0, 0);
+      if (!(expiry > today)) {
+        toast.error('Expiry date must be in the future');
+        return;
+      }
+    } catch (e) {
+      toast.error('Invalid expiry date');
       return;
     }
     try {
@@ -266,6 +311,14 @@ export default function MedicationInventoryPage() {
             </Dialog>
           </div>
         </div>
+        {/* Search / Filter */}
+        <div className="mt-4 flex items-center gap-3">
+          <input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Search name, brand, strength..." className="w-full rounded-md border px-3 py-2" />
+          <select value={filter} onChange={(e)=>setFilter(e.target.value)} className="rounded-md border px-3 py-2">
+            <option value="all">All</option>
+            <option value="lowstock">Low stock (≤10)</option>
+          </select>
+        </div>
       </div>
 
       {/* Table */}
@@ -289,7 +342,7 @@ export default function MedicationInventoryPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {meds.map((m) => (
+                {filteredMeds.map((m) => (
                 <TableRow key={m._id}>
                   <TableCell>{m.name}</TableCell>
                   <TableCell>{m.brandName}</TableCell>
