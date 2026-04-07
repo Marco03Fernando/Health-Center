@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUserApp } from '@/contexts/UserAppContext';
 import { adminLogin } from '@/services/admin-auth.service';
 import { Button } from '@/components/ui/button';
@@ -15,13 +15,15 @@ const AuthPage = () => {
     const [error, setError] = useState('');
     const { login, register } = useUserApp();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const redirectTo = searchParams.get('redirect') || '/user';
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         if (isLogin) {
             const ok = await login(email, password);
             if (ok) {
-                navigate('/user');
+                navigate(redirectTo);
             }
             else {
                 // Fallback: try admin login so admins don't need a separate login URL
@@ -49,7 +51,7 @@ const AuthPage = () => {
             }
             const ok = await register({ fullName, phone, email, password });
             if (ok)
-                navigate('/user');
+                navigate(redirectTo);
             else
                 setError('Email already registered');
         }

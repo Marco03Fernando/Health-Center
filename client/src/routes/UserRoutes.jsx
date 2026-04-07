@@ -1,4 +1,4 @@
-import { Route, Routes, Navigate } from "react-router-dom";
+import { Route, Routes, Navigate, useLocation } from "react-router-dom";
 import { UserAppProvider, useUserApp } from "@/contexts/UserAppContext";
 import { UserLayout } from "@/layouts/UserLayout";
 // Pages
@@ -17,8 +17,9 @@ import BookLabTestPage from "@/pages/user/BookLabTestPage";
 import LabBookingDetailPage from "@/pages/user/LabBookingDetailPage";
 function ProtectedRoute({ children }) {
     const { user } = useUserApp();
+    const location = useLocation();
     if (!user)
-        return <Navigate to="/user/auth" replace/>;
+        return <Navigate to={`/user/auth?redirect=${encodeURIComponent(location.pathname)}`} replace/>;
     return <UserLayout>{children}</UserLayout>;
 }
 function AuthRoute({ children }) {
