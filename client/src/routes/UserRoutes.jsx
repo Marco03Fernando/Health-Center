@@ -1,4 +1,4 @@
-import { Route, Routes, Navigate } from "react-router-dom";
+import { Route, Routes, Navigate, useLocation } from "react-router-dom";
 import { UserAppProvider, useUserApp } from "@/contexts/UserAppContext";
 import { UserLayout } from "@/layouts/UserLayout";
 // Pages
@@ -15,10 +15,13 @@ import UserProfilePage from "@/pages/user/ProfilePage";
 import LabBookingsPage from "@/pages/user/LabBookingsPage";
 import BookLabTestPage from "@/pages/user/BookLabTestPage";
 import LabBookingDetailPage from "@/pages/user/LabBookingDetailPage";
+import TestReportsPage from "@/pages/user/TestReportsPage";
+import TestReportDetailPage from "@/pages/user/TestReportDetailPage";
 function ProtectedRoute({ children }) {
     const { user } = useUserApp();
+    const location = useLocation();
     if (!user)
-        return <Navigate to="/user/auth" replace/>;
+        return <Navigate to={`/user/auth?redirect=${encodeURIComponent(location.pathname)}`} replace/>;
     return <UserLayout>{children}</UserLayout>;
 }
 function AuthRoute({ children }) {
@@ -37,6 +40,8 @@ function UserAppRoutes() {
       <Route path="lab-bookings" element={<ProtectedRoute><LabBookingsPage /></ProtectedRoute>}/>
       <Route path="lab-bookings/new" element={<ProtectedRoute><BookLabTestPage /></ProtectedRoute>}/>
       <Route path="lab-bookings/:id" element={<ProtectedRoute><LabBookingDetailPage /></ProtectedRoute>}/>
+    <Route path="test-reports" element={<ProtectedRoute><TestReportsPage /></ProtectedRoute>}/>
+    <Route path="test-reports/:id" element={<ProtectedRoute><TestReportDetailPage /></ProtectedRoute>}/>
       <Route path="prescriptions" element={<ProtectedRoute><UserPrescriptionsPage /></ProtectedRoute>}/>
       <Route path="marketplace" element={<ProtectedRoute><UserMarketplacePage /></ProtectedRoute>}/>
       <Route path="cart" element={<ProtectedRoute><UserCartPage /></ProtectedRoute>}/>

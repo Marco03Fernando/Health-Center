@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -40,6 +40,12 @@
     --sidebar-accent-foreground: 210 20% 90%;
     --sidebar-border: 215 20% 22%;
     --sidebar-ring: 187 72% 38%;
+
+    /* Landing page gradients & shadows */
+    --hero-gradient: linear-gradient(135deg, hsl(187, 72%, 95%) 0%, hsl(160, 60%, 95%) 50%, hsl(210, 20%, 98%) 100%);
+    --cta-gradient: linear-gradient(135deg, hsl(187, 72%, 38%) 0%, hsl(160, 60%, 45%) 100%);
+    --card-shadow: 0 2px 16px -2px hsl(187 72% 38% / 0.08);
+    --card-shadow-hover: 0 8px 30px -4px hsl(187 72% 38% / 0.15);
   }
 
   .dark {
@@ -92,5 +98,38 @@
   .glass-card {
     @apply bg-card/80 backdrop-blur-sm shadow-sm;
     border: 1px solid hsl(var(--border) / 0.5);
+  }
+}
+
+@layer components {
+  .section-container {
+    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .section-padding {
+    @apply py-16 md:py-24;
+  }
+
+  .card-healthcare {
+    @apply bg-card rounded-2xl border border-border p-6 transition-all duration-300;
+    box-shadow: var(--card-shadow);
+  }
+
+  .card-healthcare:hover {
+    box-shadow: var(--card-shadow-hover);
+    transform: translateY(-2px);
+  }
+
+  .gradient-hero {
+    background: var(--hero-gradient);
+  }
+
+  .gradient-cta {
+    background: var(--cta-gradient);
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--cta-gradient);
   }
 }

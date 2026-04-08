@@ -2,6 +2,9 @@ const mongoose = require("mongoose");
 const PharmacyOrder = require("../../models/pharmacy/pharmacyOrder");
 const MedicationInventory = require("../../models/pharmacy/medicationInventory");
 
+// Prescription model to build orders from prescriptions
+const Prescription = require("../../models/doctorChanneling/prescription.model");
+
 // ✅ Email utility (make sure this file exists)
 const sendInvoiceEmail = require("../../utils/sendInvoiceEmail");
 
@@ -288,6 +291,70 @@ const createOrder = async (req, res) => {
   }
 };
 
+    /**
+     * Create an order from a prescription id.
+     * Patients can call this endpoint to place an order; the order will be created
+     * with status WAITING_STOCK and an empty items array so pharmacy staff can
+     * complete it later by selecting inventory items.
+     */
+    const createOrderFromPrescription = async (req, res) => {
+      try {
+        const { prescriptionId } = req.body;
+        if (!prescriptionId || !isValidObjectId(prescriptionId)) {
+          return res.status(400).json({ message: "prescriptionId is required" });
+        }
+
+        const p = await Prescription.findById(prescriptionId)
+          .populate("userId", "fullName email phone")
+          .populate("doctorId", "name specialization")
+          .lean();
+
+        if (!p) return res.status(404).json({ message: "Prescription not found" });
+
+        const patient = {
+          name: (p.userId && (p.userId.fullName || p.userId.name)) || (req.user && (req.user.fullName || req.user.name)) || "Patient",
+          email: (p.userId && p.userId.email) || (req.user && req.user.email) || "",
+          phone: (p.userId && p.userId.phone) || (req.user && req.user.phone) || "",
+        };
+
+        const lines = [];
+        lines.push(`Prescription: ${p.prescriptionNo || "-"}`);
+        lines.push(`Doctor: ${p.doctorId?.name || "-"}`);
+        if (p.diagnosis) lines.push(`Diagnosis: ${p.diagnosis}`);
+        if (p.notes) lines.push(`Notes: ${p.notes}`);
+        lines.push("Medicines:");
+        const items = Array.isArray(p.items) ? p.items : [];
+        for (const it of items) {
+          lines.push(`- ${it.medicineName || "Medicine"} x${it.quantity || 1} ${it.instructions ? `(${it.instructions})` : ""}`);
+        }
+
+        const prescriptionTextSnapshot = lines.join("\n");
+
+        // Create a bare WAITING_STOCK order with empty items so pharmacist can complete
+        const created = await PharmacyOrder.create({
+          orderNo: makeOrderNo(),
+          patient,
+          prescriptionTextSnapshot,
+          prescriptionId: p._id,
+          status: "WAITING_STOCK",
+          items: [],
+          subtotal: 0,
+          total: 0,
+        });
+
+        // try to send notification email (non-blocking)
+        try {
+          await sendInvoiceEmail({ to: patient.email, order: created, mode: "WAITING_STOCK" });
+        } catch (e) {
+          console.log("Waiting email failed:", e?.message || e);
+        }
+
+        return res.status(201).json({ message: "Order placed", order: created });
+      } catch (err) {
+        return res.status(500).json({ message: err.message });
+      }
+    };
+
 const getOrders = async (req, res) => {
   try {
     const orders = await PharmacyOrder.find().sort({ createdAt: -1 });
@@ -312,7 +379,17 @@ const updateOrder = async (req, res) => {
     const allowed = {};
     if (req.body.patient) allowed.patient = req.body.patient;
     if (req.body.prescriptionTextSnapshot) allowed.prescriptionTextSnapshot = req.body.prescriptionTextSnapshot;
-    if (req.body.status) allowed.status = req.body.status;
+    // Prevent direct status -> CONFIRMED updates via this endpoint. Pharmacists
+    // must use `/orders/:id/items` to provide allocations so stock is checked
+    // and deductions are applied atomically. This avoids marking orders
+    // confirmed when medicines are out of stock.
+    if (req.body.status) {
+      const st = String(req.body.status).toLowerCase();
+      if (st === "confirmed" || st === "fulfilled" || st === "completed") {
+        return res.status(400).json({ message: "Do not set status to CONFIRMED via this endpoint. Use PUT /api/pharmacy-orders/:id/items to allocate items and confirm the order." });
+      }
+      allowed.status = req.body.status;
+    }
 
     const order = await PharmacyOrder.findByIdAndUpdate(req.params.id, allowed, {
       new: true,
@@ -373,6 +450,55 @@ const updateOrderItems = async (req, res) => {
       await session.abortTransaction();
       session.endSession();
       return res.status(built.error.status).json({ message: built.error.message });
+    }
+
+    // If this order was created from a Prescription, ensure pharmacist provided
+    // allocations for ALL prescribed medicines. If some prescription items are
+    // not covered by the provided allocations, keep the order in WAITING_STOCK
+    // and notify the patient, instead of marking it CONFIRMED.
+    const orderPresId = order.prescriptionId;
+    if (orderPresId) {
+      try {
+        const pres = await Prescription.findById(orderPresId).lean();
+        if (pres && Array.isArray(pres.items) && pres.items.length > 0) {
+          const presNames = pres.items.map((pi) => String(pi.medicineName || "").toLowerCase());
+
+          // get allocated medication names from plannedItems
+          const allocMedIds = (built.plannedItems || []).map((p) => p.medicationId).filter(Boolean);
+          const allocMeds = await MedicationInventory.find({ _id: { $in: allocMedIds } }).session(session).lean();
+          const allocNames = allocMeds.map((m) => String(m.name || "").toLowerCase());
+
+          const missing = presNames.filter((pn) => !allocNames.some((an) => an.includes(pn) || pn.includes(an)));
+          if (missing.length > 0) {
+            // Keep order as WAITING_STOCK and save current allocations (if any)
+            order.status = "WAITING_STOCK";
+            order.items = built.plannedItems || [];
+            order.subtotal = 0;
+            order.total = 0;
+
+            await order.save({ session });
+            await session.commitTransaction();
+            session.endSession();
+
+            // Notify patient about missing items (best-effort)
+            try {
+              await sendInvoiceEmail({
+                to: order.patient.email,
+                order,
+                mode: "WAITING_STOCK",
+                waitingInfo: { missingItems: missing },
+              });
+            } catch (e) {
+              console.log("Waiting email failed:", e.message);
+            }
+
+            return res.status(200).json({ message: "Order updated as WAITING_STOCK due to missing prescription items", missing, order });
+          }
+        }
+      } catch (err) {
+        // non-fatal — continue with normal flow
+        console.log("Prescription coverage check failed:", err.message);
+      }
     }
 
     // Optional field updates
@@ -445,6 +571,7 @@ const updateOrderItems = async (req, res) => {
 
 module.exports = {
   createOrder,
+  createOrderFromPrescription,
   getOrders,
   getOrderById,
   updateOrder,
