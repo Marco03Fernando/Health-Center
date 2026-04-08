@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, ArrowLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowLeft, FlaskConical, MapPin, Clock, Check, Heart, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 const STEPS = [
-    { label: "Test" },
-    { label: "Lab" },
-    { label: "Slot" },
-    { label: "Confirm" },
+  { label: "Test", icon: FlaskConical },
+  { label: "Lab", icon: MapPin },
+  { label: "Slot", icon: Clock },
+  { label: "Confirm", icon: Check },
 ];
 // ─── Stepper Component ────────────────────────────────────────────────────────
 function Stepper({ current }) {
@@ -23,16 +23,16 @@ function Stepper({ current }) {
             const stepNum = idx + 1;
             const completed = stepNum < current;
             const active = stepNum === current;
-            return (<div key={s.label} className="flex-1 flex md:flex-col items-center md:items-center md:justify-center md:text-center px-1 md:px-0">
+            const Icon = s.icon;
+            return (
+              <div key={s.label} className="flex-1 flex md:flex-col items-center md:items-center md:justify-center md:text-center px-1 md:px-0">
                 <div className="relative flex items-center md:flex-col">
                   <div className={`flex items-center justify-center w-9 h-9 md:w-12 md:h-12 rounded-full transition-transform duration-150 ${completed
                     ? "bg-primary text-primary-foreground"
                     : active
                         ? "bg-background text-primary ring-4 ring-primary/20 shadow-md"
                         : "bg-background text-muted-foreground border border-border"}`}>
-                    {completed ? (<svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 md:h-5 md:w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 00-1.414-1.414L7 12.172 4.707 9.879a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l9-9z" clipRule="evenodd"/>
-                      </svg>) : (<span className="font-medium text-sm">{stepNum}</span>)}
+                    {completed ? (<Check className="h-4 w-4 md:h-5 md:w-5"/>) : (<Icon className="h-4 w-4 md:h-5 md:w-5"/>)}
                   </div>
                   <div className="ml-2 md:ml-0 md:mt-2">
                     <div className={`text-sm ${active
@@ -44,8 +44,9 @@ function Stepper({ current }) {
                     </div>
                   </div>
                 </div>
-              </div>);
-        })}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>);
@@ -100,6 +101,19 @@ function MiniCalendar({ slots, onSelectDate, }) {
         })}
       </div>
     </div>);
+}
+
+// SummaryItem helper
+function SummaryItem({ label, value, icon: Icon, active }) {
+  return (
+    <div className={`flex items-start gap-3 py-2 ${active ? "opacity-100 animate-in fade-in slide-in-from-left-2 duration-300" : "opacity-40"}`}>
+      {Icon && (<div className="text-muted-foreground mt-0.5"><Icon className="w-4 h-4"/></div>)}
+      <div className="flex-1">
+        <div className="text-xs uppercase text-muted-foreground">{label}</div>
+        <div className="text-sm font-medium text-foreground">{value || "—"}</div>
+      </div>
+    </div>
+  );
 }
 // ─── Main Page ────────────────────────────────────────────────────────────────
 const BookLabTestPage = () => {
@@ -218,6 +232,17 @@ const BookLabTestPage = () => {
     const selectedTestObj = tests.find((t) => t._id === selectedTest);
     const selectedCenterObj = centers.find((c) => c._id === selectedCenter);
     const selectedSlotObj = slots.find((s) => s._id === selectedSlot);
+    const summaryPercent = (step / STEPS.length) * 100;
+    // Pre-encode heart SVG once to avoid embedding closing tags directly in JSX template literals
+    const heartSvg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='black' d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 6.01 4.01 4 6.5 4 8.04 4 9.5 4.99 10 6.09 10.5 4.99 11.96 4 13.5 4 15.99 4 18 6.01 18 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'/></svg>";
+    const heartSvgEncoded = encodeURIComponent(heartSvg);
+    const formatPrice = (t) => {
+      const p = t?.price ?? t?.cost ?? t?.fee ?? null;
+      if (p == null)
+        return null;
+      const n = Number(p);
+      return Number.isNaN(n) ? String(p) : `Rs ${n.toFixed(2)}`;
+    };
     if (loading) {
         return (<div className="flex items-center justify-center py-20">
         <div className="text-center">
@@ -226,7 +251,7 @@ const BookLabTestPage = () => {
         </div>
       </div>);
     }
-    return (<div className="space-y-5 animate-fade-in">
+    return (<div key={step} className="space-y-5 animate-in fade-in slide-in-from-right-8 duration-500">
       {/* Header */}
       <div>
         <div className="flex items-center gap-3 mb-1">
@@ -262,23 +287,37 @@ const BookLabTestPage = () => {
                 <div className="space-y-3">
                   {tests.length === 0 ? (<p className="text-muted-foreground text-sm">
                       No diagnostic tests available.
-                    </p>) : (tests.map((t) => (<label key={t._id} className={`flex items-start p-3.5 border rounded-lg cursor-pointer transition-colors ${selectedTest === t._id
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-primary/40 hover:bg-muted/50"}`}>
-                        <input type="radio" name="test" checked={selectedTest === t._id} onChange={() => setSelectedTest(t._id)} className="mr-3 mt-1 accent-primary"/>
-                        <div className="space-y-1">
-                          <div className="font-medium text-foreground text-sm">
-                            {t.name}
+                    </p>) : (tests.map((t) => {
+                    const priceLabel = formatPrice(t);
+                    return (
+                        <label key={t._id} className={`flex items-center justify-between p-3.5 border rounded-lg cursor-pointer transition-colors ${selectedTest === t._id
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-border hover:border-primary/40 hover:bg-muted/50 hover:shadow"}`}>
+                          <div className="flex items-start gap-3">
+                            <input type="radio" name="test" checked={selectedTest === t._id} onChange={() => setSelectedTest(t._id)} className="mr-2 mt-1 accent-primary w-4 h-4"/>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <FlaskConical className="w-4 h-4 text-primary/90"/>
+                                <div className="font-medium text-foreground text-sm">
+                                  {t.name}
+                                </div>
+                              </div>
+                              {t.description && (<div className="text-xs text-muted-foreground">
+                                  {t.description}
+                                </div>)}
+                              {t.instructions && (<div className="text-xs text-primary/70 italic">
+                                  <span className="font-semibold not-italic">Prep: </span>
+                                  {t.instructions}
+                                </div>)}
+                            </div>
                           </div>
-                          {t.description && (<div className="text-xs text-muted-foreground">
-                              {t.description}
-                            </div>)}
-                          {t.instructions && (<div className="text-xs text-primary/70 italic">
-                              <span className="font-semibold not-italic">Prep: </span>
-                              {t.instructions}
-                            </div>)}
-                        </div>
-                      </label>)))}
+                          {priceLabel ? (<div className="ml-4 text-sm font-medium text-primary bg-muted/10 px-2 py-0.5 rounded-md">
+                            <span className="sr-only">Price</span>
+                            {priceLabel}
+                          </div>) : null}
+                        </label>
+                    );
+                  })) }
                 </div>
                 <div className="flex justify-end mt-5">
                   <Button disabled={!selectedTest} onClick={() => setStep(2)}>
@@ -376,7 +415,8 @@ const BookLabTestPage = () => {
             </Card>)}
 
           {/* Step 4 — Confirm */}
-          {step === 4 && (<Card>
+          {step === 4 && (<div className="max-w-2xl mx-auto w-full transition-all duration-700">
+            <Card>
               <CardContent className="p-6">
                 <h2 className="font-display font-semibold text-foreground mb-4">
                   Confirm Your Booking
@@ -386,6 +426,10 @@ const BookLabTestPage = () => {
                     <dt className="text-muted-foreground">Diagnostic Test</dt>
                     <dd className="font-medium text-foreground">
                       {selectedTestObj?.name || "—"}
+                    </dd>
+                    <dt className="text-muted-foreground">Price</dt>
+                    <dd className="mt-0.5">
+                      {formatPrice(selectedTestObj) ? (<span className="inline-block text-sm font-medium text-primary bg-muted/10 px-2 py-0.5 rounded-md">{formatPrice(selectedTestObj)}</span>) : (<span className="font-medium text-foreground">—</span>)}
                     </dd>
                     <dt className="text-muted-foreground">Lab Center</dt>
                     <dd className="font-medium text-foreground">
@@ -412,50 +456,142 @@ const BookLabTestPage = () => {
                   </Button>
                 </div>
               </CardContent>
-            </Card>)}
+            </Card>
+          </div>)}
         </div>
 
         {/* Summary Sidebar */}
-        <aside className="md:col-span-1">
-          <Card>
-            <CardContent className="p-4 text-sm">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-display font-semibold text-foreground">
-                  Summary
-                </h3>
-                {step > 1 && (<button onClick={() => setStep(Math.max(1, step - 1))} className="text-xs text-primary hover:underline">
-                    Edit
-                  </button>)}
+        {/* Summary Sidebar */}
+{step !== 4 && (
+  <aside className="md:col-span-1">
+    <div className="sticky top-6">
+      <Card className="border-none ring-1 ring-border shadow-lg bg-card overflow-hidden">
+        
+        {/* Progress Header */}
+        <div className="bg-primary/5 px-4 py-3 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            
+            {/* Progress Circle */}
+            <div className="relative w-8 h-8 flex items-center justify-center rounded-full bg-background">
+              <Heart 
+                className={`w-4 h-4 transition-all duration-500 ${
+                  selectedTest 
+                    ? 'fill-primary text-primary scale-110 drop-shadow-[0_0_6px_rgba(99,102,241,0.4)]' 
+                    : 'text-muted-foreground'
+                }`} 
+              />
+
+              <svg className="absolute inset-0 w-full h-full -rotate-90">
+                {/* Background ring */}
+                <circle
+                  cx="16"
+                  cy="16"
+                  r="13.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  className="text-primary/20"
+                />
+                
+                {/* Progress ring */}
+                <circle
+                  cx="16"
+                  cy="16"
+                  r="13.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeDasharray={85}
+                  strokeDashoffset={85 - (85 * summaryPercent) / 100}
+                  className="text-primary transition-all duration-700 ease-in-out"
+                />
+              </svg>
+            </div>
+
+            <h3 className="font-semibold text-sm">Booking Summary</h3>
+          </div>
+
+          {step > 1 && (
+            <button 
+              onClick={() => setStep(Math.max(1, step - 1))} 
+              className="text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+            >
+              Edit
+            </button>
+          )}
+        </div>
+
+        <CardContent className="p-4">
+          <div className="space-y-4">
+            
+            {/* Summary items */}
+            <div className="divide-y divide-border/50">
+              <SummaryItem 
+                label="Diagnostic Test" 
+                value={selectedTestObj?.name} 
+                icon={FlaskConical} 
+                active={!!selectedTest} 
+              />
+              <SummaryItem 
+                label="Lab Center" 
+                value={selectedCenterObj?.name} 
+                icon={MapPin} 
+                active={!!selectedCenter} 
+              />
+              <SummaryItem 
+                label="Appt. Date" 
+                value={
+                  selectedDate 
+                    ? selectedDate.toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        year: 'numeric' 
+                      }) 
+                    : null
+                } 
+                icon={Calendar} 
+                active={!!selectedDate} 
+              />
+              <SummaryItem 
+                label="Time Slot" 
+                value={
+                  selectedSlotObj 
+                    ? `${selectedSlotObj.startTime} - ${selectedSlotObj.endTime}` 
+                    : null
+                } 
+                icon={Clock} 
+                active={!!selectedSlot} 
+              />
+            </div>
+
+            {/* Price Footer */}
+            <div className="pt-4 mt-2 border-t-2 border-dashed border-border">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Total Payable
+                </span>
+                <span className="text-xl font-bold text-primary">
+                  {formatPrice(selectedTestObj) || '—'}
+                </span>
               </div>
-              <dl className="space-y-2.5 text-xs">
-                <div>
-                  <dt className="text-muted-foreground">Test</dt>
-                  <dd className="font-medium text-foreground mt-0.5">
-                    {selectedTestObj?.name || "—"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Lab</dt>
-                  <dd className="font-medium text-foreground mt-0.5">
-                    {selectedCenterObj?.name || "—"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Date</dt>
-                  <dd className="font-medium text-foreground mt-0.5">
-                    {selectedDate?.toDateString() || "—"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Slot</dt>
-                  <dd className="font-medium text-foreground mt-0.5">
-                    {selectedSlotObj ? selectedSlotObj.startTime : "—"}
-                  </dd>
-                </div>
-              </dl>
-            </CardContent>
-          </Card>
-        </aside>
+              <p className="text-[10px] text-muted-foreground mt-1 text-right italic">
+                *Taxes may apply at the center
+              </p>
+            </div>
+
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Help Tip */}
+      <div className="mt-4 px-2">
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          Need help? Contact our support if you face issues with slot availability.
+        </p>
+      </div>
+    </div>
+  </aside>
+)}
       </div>
     </div>);
 };
