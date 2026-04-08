@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useUserApp } from "@/contexts/UserAppContext";
-import { Heart, LayoutDashboard, Stethoscope, CalendarCheck, FileText, ShoppingBag, Package, User, LogOut, ShoppingCart, Menu, X, FlaskConical, } from "lucide-react";
+import { Heart, LayoutDashboard, Stethoscope, CalendarCheck, FileText, FileSearch, ShoppingBag, Package, User, LogOut, ShoppingCart, Menu, X, FlaskConical, } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 const navItems = [
@@ -9,6 +9,7 @@ const navItems = [
     { to: "/user/consult", label: "Consultation", icon: Stethoscope },
     { to: "/user/appointments", label: "Appointments", icon: CalendarCheck },
     { to: "/user/lab-bookings", label: "Lab Bookings", icon: FlaskConical },
+    { to: "/user/test-reports", label: "Test Reports", icon: FileSearch },
     { to: "/user/prescriptions", label: "Prescriptions", icon: FileText },
     { to: "/user/marketplace", label: "Pharmacy", icon: ShoppingBag },
     { to: "/user/orders", label: "Orders", icon: Package },
