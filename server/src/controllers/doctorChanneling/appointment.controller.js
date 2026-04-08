@@ -2,7 +2,9 @@ const mongoose = require("mongoose");
 const Appointment = require("../../models/doctorChanneling/appointment.model");
 const Slot = require("../../models/doctorChanneling/slot.model");
 const Doctor = require("../../models/doctorChanneling/doctor.model");
+const User = require("../../models/doctorChanneling/user.model");
 const ApiError = require("../../utils/ApiError");
+const sendAppointmentBookedEmail = require("../../utils/sendAppointmentBookedEmail");
 
 async function create(req, res, next) {
   try {
@@ -31,13 +33,15 @@ async function create(req, res, next) {
       throw new ApiError(400, "Invalid slotId");
     }
 
-    const [slot, doctor] = await Promise.all([
+    const [slot, doctor, patient] = await Promise.all([
       Slot.findById(slotId),
       Doctor.findById(doctorId).lean(),
+      User.findById(resolvedUserId).select("fullName email phone").lean(),
     ]);
 
     if (!slot) throw new ApiError(404, "Slot not found");
     if (!doctor) throw new ApiError(404, "Doctor not found");
+    if (!patient) throw new ApiError(404, "Patient not found");
 
     if (!slot.isActive) {
       throw new ApiError(400, "Slot is inactive");
@@ -85,6 +89,27 @@ async function create(req, res, next) {
       .populate("centerId", "name district address phone")
       .populate("slotId", "date startTime endTime")
       .lean();
+
+    try {
+      await sendAppointmentBookedEmail({
+        userEmail: populated?.userId?.email || patient?.email || "",
+        userName: populated?.userId?.fullName || patient?.fullName || "",
+        doctorName: populated?.doctorId?.name || doctor?.name || "",
+        specialization:
+          populated?.doctorId?.specialization || doctor?.specialization || "",
+        centerName: populated?.centerId?.name || "",
+        appointmentDate: populated?.slotId?.date || "",
+        startTime: populated?.slotId?.startTime || "",
+        endTime: populated?.slotId?.endTime || "",
+        note: populated?.note || "",
+        fee:
+          populated?.doctorId?.fee != null
+            ? populated.doctorId.fee
+            : doctor?.fee ?? "",
+      });
+    } catch (emailErr) {
+      console.error("Appointment booking email send failed:", emailErr.message);
+    }
 
     return res.status(201).json({
       success: true,
