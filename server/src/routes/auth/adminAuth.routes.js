@@ -5,6 +5,7 @@ const {
   registerAdmin,
   loginAdmin,
   getAdminMe,
+  logoutAdmin,
 } = require("../../controllers/auth/Doc_adminAuth.controller");
 
 const { protect } = require("../../middlewares/auth.middleware");
@@ -12,6 +13,13 @@ const { allowRoles } = require("../../middlewares/role.middleware");
 
 router.post("/register", registerAdmin);
 router.post("/login", loginAdmin);
-router.get("/me", protect, allowRoles("admin", "superadmin", "lab-tech", "center-admin"), getAdminMe);
+router.post("/logout", logoutAdmin);
+
+router.get(
+  "/me",
+  protect,
+  allowRoles("admin", "superadmin", "lab-tech", "center-admin"),
+  getAdminMe
+);
 
 module.exports = router;

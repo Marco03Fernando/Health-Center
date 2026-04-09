@@ -13,5 +13,5 @@ export async function doctorLogout() {
 }
 
 export async function doctorGetCurrentUser(): Promise<{ user: AuthUser }> {
-  return apiFetch("/auth/me");
+  return apiFetch(`/auth/me?_=${Date.now()}`);
 }
