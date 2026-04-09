@@ -20,7 +20,7 @@ export async function adminGetCurrentUser(): Promise<{ admin?: AdminUser; user?:
 
 export async function adminLogout() {
   try {
-    await apiFetch("/auth/logout", { method: "POST" });
+    await apiFetch("/admin/auth/logout", { method: "POST" });
   } catch {
     // ignore backend logout errors
   } finally {

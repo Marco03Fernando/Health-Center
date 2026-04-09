@@ -1,5 +1,5 @@
 const Admin = require("../../models/doctorChanneling/Admin/Admin");
-require("../../models/HealthCenter"); // ensure 'centers' model is registered for populate
+require("../../models/HealthCenter");
 const generateToken = require("../../utils/generateToken");
 
 // Register first admin manually / via Postman
@@ -13,6 +13,7 @@ async function registerAdmin(req, res) {
 
     const normalizedEmail = String(email).trim().toLowerCase();
     const existing = await Admin.findOne({ email: normalizedEmail });
+
     if (existing) {
       return res.status(400).json({ message: "Admin already exists" });
     }
@@ -50,6 +51,7 @@ async function loginAdmin(req, res) {
     const admin = await Admin.findOne({ email: normalizedEmail })
       .select("+password")
       .populate("centerId", "_id name address district openingTime closingTime");
+
     if (!admin || !admin.isActive) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
@@ -65,7 +67,6 @@ async function loginAdmin(req, res) {
       accountType: "admin",
     });
 
-    // Make admin login work like doctor/user session login
     req.session.userId = admin._id.toString();
     req.session.role = admin.role;
     req.session.accountType = "admin";
@@ -99,8 +100,14 @@ async function loginAdmin(req, res) {
 
 async function getAdminMe(req, res) {
   try {
-    const admin = await Admin.findById(req.admin._id).populate("centerId", "_id name address district openingTime closingTime");
-    if (!admin) return res.status(404).json({ message: "Admin not found" });
+    const admin = await Admin.findById(req.admin._id).populate(
+      "centerId",
+      "_id name address district openingTime closingTime"
+    );
+
+    if (!admin) {
+      return res.status(404).json({ message: "Admin not found" });
+    }
 
     return res.json({
       admin: {
@@ -121,4 +128,29 @@ async function getAdminMe(req, res) {
   }
 }
 
-module.exports = { registerAdmin, loginAdmin, getAdminMe };
+async function logoutAdmin(req, res) {
+  try {
+    return req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ message: "Logout failed" });
+      }
+
+      res.clearCookie("connect.sid", {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: false,
+      });
+
+      return res.status(200).json({ message: "Admin logged out successfully" });
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+}
+
+module.exports = {
+  registerAdmin,
+  loginAdmin,
+  getAdminMe,
+  logoutAdmin,
+};
