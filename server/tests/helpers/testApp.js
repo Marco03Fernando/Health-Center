@@ -13,6 +13,8 @@ const errorMiddleware = require('../../src/middlewares/error.middleware');
 const diagnosticTestRoutes = require('../../src/routes/appointment/diagnosticTest.routes');
 const labAppointmentRoutes = require('../../src/routes/appointment/appointmentRoutes');
 const labSlotRoutes = require('../../src/routes/appointment/appointmentSlotRoutes');
+const medicationInventoryRoutes = require('../../src/routes/pharmacy/medicationInventoryRoutes');
+const pharmacyOrderRoutes = require('../../src/routes/pharmacy/pharmacyOrderRoutes');
 
 function createTestApp() {
   const app = express();
@@ -27,6 +29,10 @@ function createTestApp() {
 
   // Diagnostic-test endpoints (mounted under /api/lab/diagnostic-tests)
   app.use('/api/lab/diagnostic-tests', diagnosticTestRoutes);
+
+  // Pharmacy endpoints
+  app.use('/api/medication-inventory', medicationInventoryRoutes);
+  app.use('/api/pharmacy-orders', pharmacyOrderRoutes);
 
   // Centralised error handler (used by controllers that call next(err))
   app.use(errorMiddleware);
