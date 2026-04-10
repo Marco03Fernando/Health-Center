@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { pharmacyApiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,8 +20,10 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-import { Loader2, Pill, Trash2, Edit2 } from "lucide-react";
+import { Loader2, Pill, Trash2, Edit2, Layers } from "lucide-react";
 import { toast } from "sonner";
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const FORM_OPTIONS = ["tablet", "capsule", "syrup", "injection", "cream", "drops", "other"];
 
@@ -53,8 +56,69 @@ export default function MedicationInventoryPage() {
   const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [batchesMed, setBatchesMed] = useState(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+
+  // Export current inventory to PDF (requires jspdf and jspdf-autotable)
+  const exportInventoryPdf = async () => {
+    try {
+      // runtime-safe constructor lookup (some bundlers expose jspdf differently)
+      const PDFCtor = typeof jsPDF !== "undefined" ? jsPDF : (typeof window !== "undefined" && window.jspdf && window.jspdf.jsPDF) ? window.jspdf.jsPDF : null;
+      if (!PDFCtor) throw new Error('jsPDF not available (import failed or unresolved).');
+      const doc = new PDFCtor();
+
+      // Header / brand area - use app `info` color (HSL 210 80% 52% -> RGB approx 35,133,231)
+      doc.setFillColor(35, 133, 231);
+      doc.rect(0, 0, doc.internal.pageSize.getWidth(), 28, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.text('Medicare', 14, 18);
+
+      // (logo removed for cleaner PDF header)
+
+      // Table columns + rows
+      const head = [['Name', 'Brand', 'Strength', 'Total Qty', 'Avg Unit Price', 'Batches']];
+      const body = (meds || []).map((m) => {
+        const totalQty = m.totalQuantity ?? (Array.isArray(m.batches) ? m.batches.reduce((s, b) => s + (b.quantity || 0), 0) : 0);
+        const avg = getAverageUnitPrice(m.batches || []);
+        return [m.name || '-', m.brandName || '-', m.strength || '-', String(totalQty), avg || '-', String((m.batches || []).length)];
+      });
+
+      doc.setTextColor(0,0,0);
+      // jspdf-autotable v5 exports a function; prefer calling autoTable(doc, ...) but
+      // fall back to doc.autoTable if attached to the instance.
+      if (typeof autoTable === 'function') {
+        autoTable(doc, {
+          startY: 36,
+          head: head,
+          body: body,
+          styles: { fontSize: 10, cellPadding: 6 },
+          headStyles: { fillColor: [245,245,245], textColor: [35,133,231], fontStyle: 'bold' },
+          theme: 'striped',
+        });
+      } else if (typeof doc.autoTable === 'function') {
+        doc.autoTable({
+          startY: 36,
+          head: head,
+          body: body,
+          styles: { fontSize: 10, cellPadding: 6 },
+          headStyles: { fillColor: [245,245,245], textColor: [35,133,231], fontStyle: 'bold' },
+          theme: 'striped',
+        });
+      } else {
+        throw new Error('jspdf-autotable not available (autoTable function not found)');
+      }
+
+      doc.save('medicare-inventory.pdf');
+    } catch (err) {
+      console.error('Export PDF failed', err);
+      const msg = err?.message || String(err) || 'Unknown error';
+      // show clearer feedback to user for diagnosis
+      try { toast.error(`PDF export failed: ${msg}`); } catch (e) { /* ignore toast errors */ }
+      alert(`PDF export failed: ${msg}\nSee console for details.`);
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -62,6 +126,17 @@ export default function MedicationInventoryPage() {
       .catch((e) => toast.error(e?.message || "Failed to load medications"))
       .finally(() => setLoading(false));
   }, []);
+
+  // read filter query param from dashboard links (e.g. ?filter=lowstock)
+  const location = useLocation();
+  useEffect(() => {
+    const qp = new URLSearchParams(location.search);
+    const f = qp.get("filter");
+    if (f) setFilter(f);
+    // open create dialog when route is /pharmacy/inventory/new or ?new=true
+    if (location.pathname && location.pathname.endsWith("/new")) setShowCreate(true);
+    if (qp.get("new") === "true") setShowCreate(true);
+  }, [location.search]);
 
   const stats = useMemo(() => {
     let lowStock = 0;
@@ -84,6 +159,10 @@ export default function MedicationInventoryPage() {
       if (filter === "lowstock") {
         const totalQty = m.totalQuantity ?? (Array.isArray(m.batches) ? m.batches.reduce((s, b) => s + (b.quantity || 0), 0) : 0);
         if (totalQty > 10) return false;
+      }
+      if (filter === "batches") {
+        const hasBatches = Array.isArray(m.batches) && m.batches.length > 0;
+        if (!hasBatches) return false;
       }
       if (!q) return true;
       if ((m.name || "").toLowerCase().includes(q)) return true;
@@ -272,25 +351,35 @@ export default function MedicationInventoryPage() {
 
         {/* Stats + Create button */}
         <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Card className="rounded-2xl border shadow-none">
+          <Card
+            className={`rounded-2xl border shadow-none cursor-pointer hover:shadow-md ${filter === 'all' ? 'ring-2 ring-primary/30' : ''}`}
+            onClick={() => { setFilter('all'); setSearch(''); }}
+          >
             <CardContent className="p-5">
               <p className="text-sm text-muted-foreground">Total Medications</p>
               <p className="mt-2 text-2xl font-bold">{stats.total}</p>
             </CardContent>
           </Card>
-          <Card className="rounded-2xl border shadow-none">
+          <Card
+            className={`rounded-2xl border shadow-none cursor-pointer hover:shadow-md ${filter === 'lowstock' ? 'ring-2 ring-primary/30' : ''}`}
+            onClick={() => { setFilter('lowstock'); setSearch(''); }}
+          >
             <CardContent className="p-5">
               <p className="text-sm text-muted-foreground">Low stock (≤10)</p>
               <p className="mt-2 text-2xl font-bold">{stats.lowStock}</p>
             </CardContent>
           </Card>
-          <Card className="rounded-2xl border shadow-none">
+          <Card
+            className={`rounded-2xl border shadow-none cursor-pointer hover:shadow-md ${filter === 'batches' ? 'ring-2 ring-primary/30' : ''}`}
+            onClick={() => { setFilter('batches'); setSearch(''); }}
+          >
             <CardContent className="p-5">
               <p className="text-sm text-muted-foreground">Total batches</p>
               <p className="mt-2 text-2xl font-bold">{stats.batches}</p>
             </CardContent>
           </Card>
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-end gap-2">
+            <Button size="sm" variant="outline" onClick={exportInventoryPdf}>Export PDF</Button>
             <Dialog open={showCreate} onOpenChange={setShowCreate}>
               <DialogTrigger asChild>
                 <Button>New Medication</Button>
@@ -329,44 +418,43 @@ export default function MedicationInventoryPage() {
             Loading medications...
           </div>
         ) : (
-          <Table className="mt-4">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Brand</TableHead>
-                <TableHead>Strength</TableHead>
-                <TableHead>Total Qty</TableHead>
-                <TableHead>Avg Unit Price</TableHead>
-                <TableHead>Batches</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-                {filteredMeds.map((m) => (
-                <TableRow key={m._id}>
-                  <TableCell>{m.name}</TableCell>
-                  <TableCell>{m.brandName}</TableCell>
-                  <TableCell>{m.strength}</TableCell>
-                  <TableCell>
-                    {m.totalQuantity ??
-                      (m.batches || []).reduce((s, b) => s + (b?.quantity || 0), 0)}
-                  </TableCell>
-                  <TableCell>{getAverageUnitPrice(m.batches || [])}</TableCell>
-                  <TableCell>{(m.batches || []).length}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(m)}>
-                        <Edit2 className="h-4 w-4" />
+          <div className="space-y-4 mt-4">
+            {filteredMeds.map((m) => {
+              const totalQty = m.totalQuantity ?? (Array.isArray(m.batches) ? m.batches.reduce((s, b) => s + (b.quantity || 0), 0) : 0);
+              const low = totalQty <= 10;
+              return (
+                <Card key={m._id}>
+                  <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <h3 className="text-base font-semibold truncate">{m.name || 'Medication'}</h3>
+                      <p className="text-sm text-muted-foreground truncate">{m.brandName || '-' } • {m.strength || '-'}</p>
+
+                      <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+                        <span>Total: {totalQty}</span>
+                        <span>Avg: {getAverageUnitPrice(m.batches || []) || '-'}</span>
+                        <Badge className={`${low ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>{low ? 'Low' : 'OK'}</Badge>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => setBatchesMed(m)} className="flex items-center gap-2">
+                        <Layers className="h-4 w-4" />
+                        View
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => handleDelete(m._id)}>
+                      <Button variant="ghost" size="sm" onClick={() => setEditing(m)} className="flex items-center gap-2">
+                        <Edit2 className="h-4 w-4" />
+                        Edit
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => handleDelete(m._id)} className="flex items-center gap-2">
                         <Trash2 className="h-4 w-4" />
+                        Delete
                       </Button>
                     </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -468,6 +556,41 @@ export default function MedicationInventoryPage() {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+      {/* Batches viewer dialog */}
+      <Dialog open={!!batchesMed} onOpenChange={(open) => { if (!open) setBatchesMed(null); }}>
+        <DialogContent className="max-h-[80vh] overflow-auto w-full max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Batches for {batchesMed?.name}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 p-2">
+            {(!batchesMed?.batches || batchesMed.batches.length === 0) ? (
+              <p className="text-sm text-muted-foreground">No batches available for this medication.</p>
+            ) : (
+              <div className="space-y-2">
+                {(batchesMed.batches || []).map((batch) => (
+                  <div key={batch._id || batch.batchNo} className="rounded-md border p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium">Batch: {batch.batchNo}</div>
+                        <div className="text-xs text-muted-foreground">Expiry: {formatDateTime(batch.expiryDate)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium">Qty: {batch.quantity || 0}</div>
+                        <div className="text-xs text-muted-foreground">Unit: {batch.unitPrice ? formatNumber(batch.unitPrice) : '-'}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button onClick={() => setBatchesMed(null)}>Close</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

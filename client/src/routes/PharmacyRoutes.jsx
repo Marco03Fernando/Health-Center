@@ -7,7 +7,6 @@ import PharmacyLoginPage from "@/pages/pharmacy/LoginPage";
 import PharmacyDashboardPage from "@/pages/pharmacy/DashboardPage";
 import MedicationInventoryPage from "@/pages/pharmacy/MedicationInventoryPage";
 import PharmacyOrdersPage from "@/pages/pharmacy/OrdersPage";
-import PharmacyProfilePage from "@/pages/pharmacy/ProfilePage";
 
 export default function PharmacyRoutes() {
   return (
@@ -20,7 +19,7 @@ export default function PharmacyRoutes() {
           <Route index element={<PharmacyDashboardPage />} />
           <Route path="inventory" element={<MedicationInventoryPage />} />
           <Route path="orders" element={<PharmacyOrdersPage />} />
-          <Route path="profile" element={<PharmacyProfilePage />} />
+          {/* Profile route removed for pharmacy */}
         </Route>
 
         <Route path="" element={<Navigate to="/pharmacy/login" replace />} />
