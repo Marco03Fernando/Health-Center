@@ -184,14 +184,7 @@ export default function PharmacyDashboardPage() {
       iconWrap: "bg-violet-100",
       iconColor: "text-violet-700",
     },
-    {
-      title: "Profile",
-      icon: FileText,
-      href: "/pharmacy/profile",
-      desc: "Update your pharmacy profile",
-      iconWrap: "bg-emerald-100",
-      iconColor: "text-emerald-700",
-    },
+    // Profile card removed per request
   ];
 
   // Recent orders (sorted, limited to 5)

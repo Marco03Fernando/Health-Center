@@ -29,7 +29,7 @@ const navItems = [
   { title: "Dashboard", url: "/pharmacy", icon: LayoutDashboard, end: true },
   { title: "Inventory", url: "/pharmacy/inventory", icon: PackageCheck },
   { title: "Orders", url: "/pharmacy/orders", icon: ClipboardList },
-  { title: "Profile", url: "/pharmacy/profile", icon: User },
+  // Profile entry removed
 ];
 
 function PharmacySidebar() {

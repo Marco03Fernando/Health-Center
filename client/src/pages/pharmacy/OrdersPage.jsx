@@ -1,8 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { pharmacyApiFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Truck, PackageCheck, CheckSquare, PlusSquare, Trash } from "lucide-react";
+// status color styles (match lab bookings scheme)
+const STATUS_STYLES = {
+  pending: "bg-yellow-100 text-yellow-800",
+  waiting_stock: "bg-yellow-100 text-yellow-800",
+  waiting: "bg-yellow-100 text-yellow-800",
+  created: "bg-blue-100 text-blue-800",
+  confirmed: "bg-green-100 text-green-800",
+  fulfilled: "bg-green-100 text-green-800",
+  completed: "bg-green-100 text-green-800",
+  cancelled: "bg-red-100 text-red-800",
+};
+
+function statusKey(s) {
+  if (!s) return "pending";
+  return String(s).toLowerCase().replace(/\s+/g, "_");
+}
+import { Loader2, Truck, PackageCheck, CheckSquare, PlusSquare, Trash, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
@@ -28,6 +45,16 @@ export default function PharmacyOrdersPage() {
       .catch((e) => toast.error(e?.message || "Failed to load orders"))
       .finally(() => setLoading(false));
   }, []);
+
+  // apply query params from links (e.g. /pharmacy/orders?status=pending)
+  const location = useLocation();
+  useEffect(() => {
+    const qp = new URLSearchParams(location.search);
+    const s = qp.get("status");
+    const q = qp.get("search");
+    if (s) setStatusFilter(s);
+    if (q) setSearch(q);
+  }, [location.search]);
 
   useEffect(() => {
     // load inventory for pharmacist to choose items
@@ -189,7 +216,7 @@ export default function PharmacyOrdersPage() {
 
         {/* Search / Filter placed under stats for full-width alignment */}
         <div className="mt-4 flex items-center gap-3">
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search orders, patient, medicine..." className="w-full rounded-md border px-3 py-2" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search orders, patient, medicine..." className="w-full" />
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-md border px-3 py-2">
             <option value="all">All</option>
             <option value="pending">Pending</option>
@@ -199,11 +226,15 @@ export default function PharmacyOrdersPage() {
 
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           {[
-            { title: "Total orders", value: stats.total, label: "all orders" },
-            { title: "Pending", value: stats.pending, label: "awaiting fulfillment" },
-            { title: "Fulfilled", value: stats.fulfilled, label: "completed orders" },
+            { title: "Total orders", value: stats.total, label: "all orders", key: "all" },
+            { title: "Pending", value: stats.pending, label: "awaiting fulfillment", key: "pending" },
+            { title: "Fulfilled", value: stats.fulfilled, label: "completed orders", key: "fulfilled" },
           ].map((s) => (
-            <Card key={s.title} className="h-full rounded-3xl border shadow-none">
+            <Card
+              key={s.title}
+              className={`h-full rounded-3xl border shadow-none cursor-pointer hover:shadow-md ${statusFilter === s.key ? "ring-2 ring-primary/30" : ""}`}
+              onClick={() => { setStatusFilter(s.key); setSearch(""); }}
+            >
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div>
@@ -227,7 +258,7 @@ export default function PharmacyOrdersPage() {
         ) : (
           <div className="grid gap-3">
             {filteredOrders.map((o, idx) => (
-              <div key={o._id || idx} className="rounded-2xl border p-4 cursor-pointer hover:shadow-sm" onClick={() => openOrderDetail(o)}>
+              <div key={o._id || idx} className="rounded-2xl border p-4 hover:shadow-sm">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-base font-semibold">
@@ -242,11 +273,15 @@ export default function PharmacyOrdersPage() {
                   </div>
                 </div>
                 <div className="mt-3 flex items-center justify-between">
-                  <Badge variant="outline" className="rounded-full capitalize">
+                  <Badge className={`rounded-full capitalize ${STATUS_STYLES[statusKey(o.status)] || "bg-gray-100 text-gray-800"}`}>
                     {o.status || "pending"}
                   </Badge>
                   <div className="flex items-center gap-3">
                     <div className="text-sm text-muted-foreground">{(o.items || []).length} items</div>
+                    <Button size="sm" variant="default" className="bg-primary text-white hover:bg-primary/90 flex items-center gap-2" onClick={(e) => { e.stopPropagation(); openOrderDetail(o); }}>
+                      <Eye className="h-4 w-4" />
+                      View
+                    </Button>
                     {o.status !== "CONFIRMED" && (
                       <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); openCompleteDialog(o); }}>
                         <CheckSquare className="mr-2 h-4 w-4" />
@@ -281,6 +316,13 @@ export default function PharmacyOrdersPage() {
             <div>
               <h4 className="text-sm font-medium mb-2">Medications to allocate</h4>
               <div className="space-y-2">
+                <div className="grid grid-cols-12 gap-2 items-center text-xs text-muted-foreground px-2">
+                  <div className="col-span-5">Medicine</div>
+                  <div className="col-span-2">Qty</div>
+                  <div className="col-span-4">Instructions</div>
+                  <div className="col-span-1 text-right"> </div>
+                </div>
+
                 {formItems.map((it, i) => (
                   <div key={i} className="grid grid-cols-12 gap-2 items-center">
                     <div className="col-span-5">
@@ -290,18 +332,23 @@ export default function PharmacyOrdersPage() {
                         </SelectTrigger>
                         <SelectContent>
                           {inventory.map((m) => (
-                            <SelectItem key={m._id} value={m._id}>{m.name}</SelectItem>
+                            <SelectItem key={m._id} value={m._id}>
+                              <div className="flex items-center justify-between w-full">
+                                <span>{m.name}</span>
+                                <span className="text-xs text-muted-foreground">{(m.stock || m.quantity || 0)} in stock</span>
+                              </div>
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="col-span-2">
-                      <Input type="number" min={1} value={it.qty} onChange={(e)=>updateFormItem(i,{qty: e.target.value})} />
+                      <Input type="number" min={1} value={it.qty} onChange={(e)=>updateFormItem(i,{qty: Number(e.target.value) || 1})} />
                     </div>
                     <div className="col-span-4">
                       <Input value={it.instructions} placeholder="Instructions (optional)" onChange={(e)=>updateFormItem(i,{instructions: e.target.value})} />
                     </div>
-                    <div className="col-span-1">
+                    <div className="col-span-1 text-right">
                       <Button size="sm" variant="ghost" onClick={()=> setFormItems(prev => prev.filter((_,idx)=>idx!==i))}>
                         <Trash className="h-4 w-4 text-muted-foreground" />
                       </Button>
@@ -310,7 +357,7 @@ export default function PharmacyOrdersPage() {
                 ))}
 
                 <div>
-                  <Button size="sm" onClick={()=> setFormItems(prev=>[...prev,{ name: "", qty:1, medicationId:"", instructions:"" }])}>Add row</Button>
+                  <Button size="sm" variant="outline" onClick={()=> setFormItems(prev=>[...prev,{ name: "", qty:1, medicationId:"", instructions:"" }])}>Add row</Button>
                 </div>
               </div>
             </div>
