@@ -3,6 +3,8 @@ const User = require("../../models/doctorChanneling/user.model");
 const Doctor = require("../../models/doctorChanneling/doctor.model");
 const generateToken = require("../../utils/generateToken");
 
+const isProduction = process.env.NODE_ENV === "production";
+
 // Public patient registration only
 async function registerPatient(req, res) {
   try {
@@ -249,7 +251,12 @@ async function logoutUser(req, res) {
         return res.status(500).json({ message: "Error logging out" });
       }
 
-      res.clearCookie("connect.sid");
+      res.clearCookie("connect.sid", {
+        httpOnly: true,
+        sameSite: isProduction ? "none" : "lax",
+        secure: isProduction,
+      });
+
       return res.status(200).json({ message: "Logged out successfully" });
     });
   } catch (err) {

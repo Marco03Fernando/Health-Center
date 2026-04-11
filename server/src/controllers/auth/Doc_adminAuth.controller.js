@@ -2,6 +2,8 @@ const Admin = require("../../models/doctorChanneling/Admin/Admin");
 require("../../models/HealthCenter");
 const generateToken = require("../../utils/generateToken");
 
+const isProduction = process.env.NODE_ENV === "production";
+
 // Register first admin manually / via Postman
 async function registerAdmin(req, res) {
   try {
@@ -137,8 +139,8 @@ async function logoutAdmin(req, res) {
 
       res.clearCookie("connect.sid", {
         httpOnly: true,
-        sameSite: "lax",
-        secure: false,
+        sameSite: isProduction ? "none" : "lax",
+        secure: isProduction,
       });
 
       return res.status(200).json({ message: "Admin logged out successfully" });

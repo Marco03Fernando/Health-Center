@@ -1,8 +1,8 @@
-import { apiFetch } from "@/lib/api";
+import { userApiFetch } from "@/lib/api";
 import type { AuthUser } from "@/types";
 
 export async function userLogin(email: string, password: string) {
-  const data = await apiFetch("/auth/login", {
+  const data = await userApiFetch("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
@@ -20,19 +20,19 @@ export async function userRegister(payload: {
   email: string;
   password: string;
 }) {
-  return apiFetch("/auth/register", {
+  return userApiFetch("/auth/register", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
 export async function userLogout() {
-  const data = await apiFetch("/auth/logout", { method: "POST" });
+  const data = await userApiFetch("/auth/logout", { method: "POST" });
   localStorage.removeItem("token");
   localStorage.removeItem("user");
   return data;
 }
 
 export async function userGetCurrentUser(): Promise<{ user: AuthUser }> {
-  return apiFetch("/auth/me");
+  return userApiFetch("/auth/me");
 }

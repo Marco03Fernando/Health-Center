@@ -1,8 +1,8 @@
-import { apiFetch } from "@/lib/api";
+import { adminApiFetch } from "@/lib/api";
 import type { AdminUser } from "@/types";
 
 export async function adminLogin(email: string, password: string) {
-  const data = await apiFetch("/admin/auth/login", {
+  const data = await adminApiFetch("/admin/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
@@ -15,12 +15,12 @@ export async function adminLogin(email: string, password: string) {
 }
 
 export async function adminGetCurrentUser(): Promise<{ admin?: AdminUser; user?: AdminUser }> {
-  return apiFetch("/admin/auth/me");
+  return adminApiFetch("/admin/auth/me");
 }
 
 export async function adminLogout() {
   try {
-    await apiFetch("/admin/auth/logout", { method: "POST" });
+    await adminApiFetch("/admin/auth/logout", { method: "POST" });
   } catch {
     // ignore backend logout errors
   } finally {

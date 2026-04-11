@@ -109,7 +109,7 @@ const DashboardPage = () => {
                 const [appointmentsRes, prescriptionsRes, ordersRes] = await Promise.allSettled([
                     apiFetch(`/appointments/user/${userId}`),
                     apiFetch("/prescriptions"),
-                    apiFetch("/orders"),
+                    apiFetch("/pharmacy-orders"),
                 ]);
                 if (appointmentsRes.status === "fulfilled") {
                     const rawAppointments = getArrayFromResponse(appointmentsRes.value);

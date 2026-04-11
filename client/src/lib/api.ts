@@ -3,7 +3,6 @@ import { API_BASE_URL } from "@/config/api";
 function buildApiUrl(endpoint: string) {
   const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
-  // If endpoint already starts with /api, keep it as-is
   const finalEndpoint = normalizedEndpoint.startsWith("/api")
     ? normalizedEndpoint
     : `/api${normalizedEndpoint}`;
@@ -11,17 +10,28 @@ function buildApiUrl(endpoint: string) {
   return `${API_BASE_URL}${finalEndpoint}`;
 }
 
+function parseResponseSafe(response: Response) {
+  return response
+    .json()
+    .catch(() => null);
+}
+
+function buildHeaders(tokenKey: string | null, headers?: HeadersInit) {
+  const token = tokenKey ? localStorage.getItem(tokenKey) : null;
+
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(headers || {}),
+  };
+}
+
 /**
- * Core fetch utility shared across all portals.
- * Automatically attaches the appropriate Bearer token when present.
- *
- * Token resolution order:
- *  1. `admin_token` – set by the admin / center-admin portal login
- *  2. `token`       – set by the patient portal login
- *  3. Omitted (cookie-only) – used by the doctor portal
- *
- * NOTE: lab_tech_token is intentionally excluded here.
- * Use `labTechApiFetch` for all lab-tech portal requests.
+ * Generic fetch utility kept for backwards compatibility.
+ * Current behavior preserved:
+ *  1. admin_token
+ *  2. token
+ *  3. cookie-only
  */
 export async function apiFetch(endpoint: string, options: RequestInit = {}) {
   const token =
@@ -39,13 +49,47 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
     },
   });
 
-  let data: any = null;
+  const data = await parseResponseSafe(response);
 
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
+  if (!response.ok) {
+    throw new Error(data?.message || `Request failed: ${response.status}`);
   }
+
+  return data;
+}
+
+/**
+ * User/patient portal fetch.
+ * ONLY reads `token`.
+ */
+export async function userApiFetch(endpoint: string, options: RequestInit = {}) {
+  const response = await fetch(buildApiUrl(endpoint), {
+    ...options,
+    credentials: "include",
+    headers: buildHeaders("token", options.headers),
+  });
+
+  const data = await parseResponseSafe(response);
+
+  if (!response.ok) {
+    throw new Error(data?.message || `Request failed: ${response.status}`);
+  }
+
+  return data;
+}
+
+/**
+ * Admin / center-admin portal fetch.
+ * ONLY reads `admin_token`.
+ */
+export async function adminApiFetch(endpoint: string, options: RequestInit = {}) {
+  const response = await fetch(buildApiUrl(endpoint), {
+    ...options,
+    credentials: "include",
+    headers: buildHeaders("admin_token", options.headers),
+  });
+
+  const data = await parseResponseSafe(response);
 
   if (!response.ok) {
     throw new Error(data?.message || `Request failed: ${response.status}`);
@@ -56,29 +100,16 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
 
 /**
  * Isolated fetch for the Lab Technician portal.
- * ONLY reads `lab_tech_token` — never picks up admin_token or any other
- * portal's credentials, preventing cross-portal authentication bleed.
+ * ONLY reads `lab_tech_token`.
  */
 export async function labTechApiFetch(endpoint: string, options: RequestInit = {}) {
-  const token = localStorage.getItem("lab_tech_token") || null;
-
   const response = await fetch(buildApiUrl(endpoint), {
     ...options,
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
+    headers: buildHeaders("lab_tech_token", options.headers),
   });
 
-  let data: any = null;
-
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
+  const data = await parseResponseSafe(response);
 
   if (!response.ok) {
     throw new Error(data?.message || `Request failed: ${response.status}`);
@@ -89,28 +120,16 @@ export async function labTechApiFetch(endpoint: string, options: RequestInit = {
 
 /**
  * Isolated fetch for the Pharmacy portal.
- * ONLY reads `pharmacy_token` — never picks up other portals' credentials.
+ * ONLY reads `pharmacy_token`.
  */
 export async function pharmacyApiFetch(endpoint: string, options: RequestInit = {}) {
-  const token = localStorage.getItem("pharmacy_token") || null;
-
   const response = await fetch(buildApiUrl(endpoint), {
     ...options,
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
+    headers: buildHeaders("pharmacy_token", options.headers),
   });
 
-  let data: any = null;
-
-  try {
-    data = await response.json();
-  } catch {
-    data = null;
-  }
+  const data = await parseResponseSafe(response);
 
   if (!response.ok) {
     throw new Error(data?.message || `Request failed: ${response.status}`);
