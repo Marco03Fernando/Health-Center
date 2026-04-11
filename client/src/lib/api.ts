@@ -1,5 +1,16 @@
 import { API_BASE_URL } from "@/config/api";
 
+function buildApiUrl(endpoint: string) {
+  const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+
+  // If endpoint already starts with /api, keep it as-is
+  const finalEndpoint = normalizedEndpoint.startsWith("/api")
+    ? normalizedEndpoint
+    : `/api${normalizedEndpoint}`;
+
+  return `${API_BASE_URL}${finalEndpoint}`;
+}
+
 /**
  * Core fetch utility shared across all portals.
  * Automatically attaches the appropriate Bearer token when present.
@@ -18,7 +29,7 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
     localStorage.getItem("token") ||
     null;
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const response = await fetch(buildApiUrl(endpoint), {
     ...options,
     credentials: "include",
     headers: {
@@ -51,7 +62,7 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}) {
 export async function labTechApiFetch(endpoint: string, options: RequestInit = {}) {
   const token = localStorage.getItem("lab_tech_token") || null;
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const response = await fetch(buildApiUrl(endpoint), {
     ...options,
     credentials: "include",
     headers: {
@@ -83,7 +94,7 @@ export async function labTechApiFetch(endpoint: string, options: RequestInit = {
 export async function pharmacyApiFetch(endpoint: string, options: RequestInit = {}) {
   const token = localStorage.getItem("pharmacy_token") || null;
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const response = await fetch(buildApiUrl(endpoint), {
     ...options,
     credentials: "include",
     headers: {
