@@ -17,8 +17,20 @@ const allowedOrigins = [
   "http://localhost:5175",
   "http://localhost:8080",
   "http://localhost:8082",
+  "https://health-center-git-main-marco-fernanods-projects.vercel.app",
   process.env.CLIENT_URL,
 ].filter(Boolean);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin)) return true;
+
+  if (origin.endsWith(".vercel.app") && origin.includes("health-center")) {
+    return true;
+  }
+
+  return false;
+}
 
 const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET || "your_secret_key",
@@ -365,7 +377,7 @@ function scheduleDailySlotMaintenance() {
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (isAllowedOrigin(origin)) {
         return callback(null, true);
       }
       return callback(new Error(`CORS blocked for origin: ${origin}`));
