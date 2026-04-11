@@ -90,30 +90,32 @@ async function create(req, res, next) {
       .populate("slotId", "date startTime endTime")
       .lean();
 
-    try {
-      await sendAppointmentBookedEmail({
-        userEmail: populated?.userId?.email || patient?.email || "",
-        userName: populated?.userId?.fullName || patient?.fullName || "",
-        doctorName: populated?.doctorId?.name || doctor?.name || "",
-        specialization:
-          populated?.doctorId?.specialization || doctor?.specialization || "",
-        centerName: populated?.centerId?.name || "",
-        appointmentDate: populated?.slotId?.date || "",
-        startTime: populated?.slotId?.startTime || "",
-        endTime: populated?.slotId?.endTime || "",
-        note: populated?.note || "",
-        fee:
-          populated?.doctorId?.fee != null
-            ? populated.doctorId.fee
-            : doctor?.fee ?? "",
-      });
-    } catch (emailErr) {
-      console.error("Appointment booking email send failed:", emailErr.message);
-    }
-
-    return res.status(201).json({
+    res.status(201).json({
       success: true,
       data: populated,
+    });
+
+    setImmediate(async () => {
+      try {
+        await sendAppointmentBookedEmail({
+          userEmail: populated?.userId?.email || patient?.email || "",
+          userName: populated?.userId?.fullName || patient?.fullName || "",
+          doctorName: populated?.doctorId?.name || doctor?.name || "",
+          specialization:
+            populated?.doctorId?.specialization || doctor?.specialization || "",
+          centerName: populated?.centerId?.name || "",
+          appointmentDate: populated?.slotId?.date || "",
+          startTime: populated?.slotId?.startTime || "",
+          endTime: populated?.slotId?.endTime || "",
+          note: populated?.note || "",
+          fee:
+            populated?.doctorId?.fee != null
+              ? populated.doctorId.fee
+              : doctor?.fee ?? "",
+        });
+      } catch (emailErr) {
+        console.error("Appointment booking email send failed:", emailErr.message);
+      }
     });
   } catch (err) {
     next(err);

@@ -59,6 +59,9 @@ const sendAppointmentBookedEmail = async ({
       user,
       pass,
     },
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 12000,
   });
 
   const safeCenterName = centerName || "Health Center";
