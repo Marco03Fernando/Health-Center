@@ -373,10 +373,15 @@ function drawHeader(doc, p) {
     .font("Helvetica")
     .fontSize(9)
     .fillColor("#64748b")
-    .text(`Issued: ${p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "-"}`, 390, 68, {
-      width: 150,
-      align: "right",
-    });
+    .text(
+      `Issued: ${p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "-"}`,
+      390,
+      68,
+      {
+        width: 150,
+        align: "right",
+      }
+    );
 
   doc
     .strokeColor("#e2e8f0")
@@ -491,6 +496,7 @@ function drawTextBox(doc, text, options = {}) {
 async function downloadPdf(req, res, next) {
   try {
     const { id } = req.params;
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new ApiError(400, "Invalid prescription id");
     }
@@ -510,132 +516,146 @@ async function downloadPdf(req, res, next) {
 
     ensurePatientOwnPrescription(req, p);
 
-    const fileName = `${p.prescriptionNo}.pdf`;
+    const rawFileName = `${p.prescriptionNo || "prescription"}.pdf`;
+    const fileName = rawFileName.replace(/[^\w.-]/g, "_");
 
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    const pdfBuffer = await new Promise((resolve, reject) => {
+      const chunks = [];
 
-    const doc = new PDFDocument({
-      size: "A4",
-      margin: 50,
-      bufferPages: true,
-      info: {
-        Title: p.prescriptionNo || "Prescription",
-        Author: p.centerId?.name || "Medical Center",
-        Subject: "Medical Prescription",
-      },
+      const doc = new PDFDocument({
+        size: "A4",
+        margin: 50,
+        bufferPages: true,
+        info: {
+          Title: p.prescriptionNo || "Prescription",
+          Author: p.centerId?.name || "Medical Center",
+          Subject: "Medical Prescription",
+        },
+      });
+
+      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
+
+      try {
+        const slot = p.appointmentId?.slotId;
+        const appointmentDate = slot?.date || "-";
+        const appointmentTime = slot?.startTime
+          ? `${slot.startTime}${slot?.endTime ? ` - ${slot.endTime}` : ""}`
+          : "-";
+
+        drawHeader(doc, p);
+
+        drawInfoCard(doc, 50, 118, 238, 104, "Patient Details", [
+          { label: "Name", value: p.userId?.fullName || "-" },
+          { label: "Phone", value: p.userId?.phone || "-" },
+          { label: "Appointment", value: appointmentDate },
+          { label: "Time", value: appointmentTime },
+        ]);
+
+        drawInfoCard(doc, 307, 118, 238, 104, "Doctor Details", [
+          { label: "Doctor", value: p.doctorId?.name || "-" },
+          { label: "Speciality", value: p.doctorId?.specialization || "-" },
+          { label: "Clinic", value: p.doctorId?.clinic || "-" },
+          { label: "Center", value: p.centerId?.name || "-" },
+        ]);
+
+        doc.y = 248;
+
+        drawSectionTitle(doc, "Diagnosis");
+        drawTextBox(doc, p.diagnosis || "-");
+
+        ensureSpace(doc, 180);
+        drawSectionTitle(doc, "Medicines");
+
+        const items = Array.isArray(p.items) ? p.items : [];
+        if (items.length === 0) {
+          drawTextBox(doc, "No medicines listed.");
+        } else {
+          items.forEach((item, index) => {
+            ensureSpace(doc, 90);
+
+            const boxY = doc.y;
+            doc
+              .roundedRect(50, boxY, 495, 70, 12)
+              .fillColor("#ffffff")
+              .strokeColor("#e2e8f0")
+              .lineWidth(1)
+              .fillAndStroke();
+
+            drawPill(doc, 64, boxY + 18, 34, 18);
+
+            doc
+              .fillColor("#0f172a")
+              .font("Helvetica-Bold")
+              .fontSize(11)
+              .text(`${index + 1}. ${item.medicineName || "-"}`, 110, boxY + 14, {
+                width: 320,
+              });
+
+            doc
+              .font("Helvetica")
+              .fontSize(9.5)
+              .fillColor("#475569")
+              .text(
+                `${item.dosage || "-"} • ${item.frequency || "-"} • ${item.duration || "-"}`,
+                110,
+                boxY + 31,
+                { width: 360 }
+              );
+
+            doc
+              .font("Helvetica")
+              .fontSize(9)
+              .fillColor("#64748b")
+              .text(item.instructions || "-", 110, boxY + 46, { width: 360 });
+
+            doc
+              .font("Helvetica-Bold")
+              .fontSize(9)
+              .fillColor("#0f172a")
+              .text(`Qty: ${item.quantity || 0}`, 455, boxY + 25, {
+                width: 70,
+                align: "right",
+              });
+
+            doc.y = boxY + 86;
+          });
+        }
+
+        if (p.notes) {
+          ensureSpace(doc, 120);
+          drawSectionTitle(doc, "Notes");
+          drawTextBox(doc, p.notes);
+        }
+
+        const pageRange = doc.bufferedPageRange();
+        for (let i = 0; i < pageRange.count; i++) {
+          doc.switchToPage(i);
+
+          doc
+            .font("Helvetica")
+            .fontSize(8)
+            .fillColor("#94a3b8")
+            .text(
+              `Generated by ${p.centerId?.name || "Medical Center"} • Page ${i + 1} of ${pageRange.count}`,
+              50,
+              800,
+              { width: 495, align: "center" }
+            );
+        }
+
+        doc.end();
+      } catch (err) {
+        reject(err);
+      }
     });
 
-    doc.pipe(res);
-
-    const slot = p.appointmentId?.slotId;
-    const appointmentDate = slot?.date || "-";
-    const appointmentTime = slot?.startTime
-      ? `${slot.startTime}${slot?.endTime ? ` - ${slot.endTime}` : ""}`
-      : "-";
-
-    drawHeader(doc, p);
-
-    drawInfoCard(doc, 50, 118, 238, 104, "Patient Details", [
-      { label: "Name", value: p.userId?.fullName || "-" },
-      { label: "Phone", value: p.userId?.phone || "-" },
-      { label: "Appointment", value: appointmentDate },
-      { label: "Time", value: appointmentTime },
-    ]);
-
-    drawInfoCard(doc, 307, 118, 238, 104, "Doctor Details", [
-      { label: "Doctor", value: p.doctorId?.name || "-" },
-      { label: "Speciality", value: p.doctorId?.specialization || "-" },
-      { label: "Clinic", value: p.doctorId?.clinic || "-" },
-      { label: "Center", value: p.centerId?.name || "-" },
-    ]);
-
-    doc.y = 248;
-
-    drawSectionTitle(doc, "Diagnosis");
-    drawTextBox(doc, p.diagnosis || "-");
-
-    ensureSpace(doc, 180);
-    drawSectionTitle(doc, "Medicines");
-
-    const items = Array.isArray(p.items) ? p.items : [];
-    if (items.length === 0) {
-      drawTextBox(doc, "No medicines listed.");
-    } else {
-      items.forEach((item, index) => {
-        ensureSpace(doc, 90);
-
-        const boxY = doc.y;
-        doc
-          .roundedRect(50, boxY, 495, 70, 12)
-          .fillColor("#ffffff")
-          .strokeColor("#e2e8f0")
-          .lineWidth(1)
-          .fillAndStroke();
-
-        drawPill(doc, 64, boxY + 18, 34, 18);
-
-        doc
-          .fillColor("#0f172a")
-          .font("Helvetica-Bold")
-          .fontSize(11)
-          .text(`${index + 1}. ${item.medicineName || "-"}`, 110, boxY + 14, {
-            width: 320,
-          });
-
-        doc
-          .font("Helvetica")
-          .fontSize(9.5)
-          .fillColor("#475569")
-          .text(
-            `${item.dosage || "-"} • ${item.frequency || "-"} • ${item.duration || "-"}`,
-            110,
-            boxY + 31,
-            { width: 360 }
-          );
-
-        doc
-          .font("Helvetica")
-          .fontSize(9)
-          .fillColor("#64748b")
-          .text(item.instructions || "-", 110, boxY + 46, { width: 360 });
-
-        doc
-          .font("Helvetica-Bold")
-          .fontSize(9)
-          .fillColor("#0f172a")
-          .text(`Qty: ${item.quantity || 0}`, 455, boxY + 25, {
-            width: 70,
-            align: "right",
-          });
-
-        doc.y = boxY + 86;
-      });
-    }
-
-    if (p.notes) {
-      ensureSpace(doc, 120);
-      drawSectionTitle(doc, "Notes");
-      drawTextBox(doc, p.notes);
-    }
-
-    const pageRange = doc.bufferedPageRange();
-    for (let i = 0; i < pageRange.count; i++) {
-      doc.switchToPage(i);
-
-      doc
-        .font("Helvetica")
-        .fontSize(8)
-        .fillColor("#94a3b8")
-        .text(
-          `Generated by ${p.centerId?.name || "Medical Center"} • Page ${i + 1} of ${pageRange.count}`,
-          50,
-          800,
-          { width: 495, align: "center" }
-        );
-    }
-
-    doc.end();
+    res.status(200);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.setHeader("Content-Length", pdfBuffer.length);
+    res.end(pdfBuffer);
   } catch (err) {
     next(err);
   }

@@ -189,10 +189,10 @@ const DashboardPage = () => {
         },
     ];
     const quickActions = [
-        { label: "Book Appointment", icon: Stethoscope, to: "/consult" },
-        { label: "View Appointments", icon: CalendarCheck, to: "/appointments" },
-        { label: "Prescriptions", icon: FileText, to: "/prescriptions" },
-        { label: "Shop Medicines", icon: ShoppingBag, to: "/marketplace" },
+        { label: "Book Appointment", icon: Stethoscope, to: "user/ConsultationPage" },
+        { label: "View Appointments", icon: CalendarCheck, to: "user/AppointmentsPage.jsx" },
+        { label: "Prescriptions", icon: FileText, to: "user/PrescriptionsPage" },
+        { label: "Shop Medicines", icon: ShoppingBag, to: "user/MarketplacePage" },
     ];
     if (loading) {
         return (<div className="space-y-6 animate-fade-in">
