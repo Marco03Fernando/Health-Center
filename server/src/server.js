@@ -9,15 +9,26 @@ const errorMiddleware = require("./middlewares/error.middleware"); // Custom err
 const session = require("express-session");
 const MongoStore = require("connect-mongo").default; // Use the default export from connect-mongo
 
+const isProduction = process.env.NODE_ENV === "production";
+
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://localhost:5175",
+  "http://localhost:8080",
+  "http://localhost:8082",
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
 const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET || "your_secret_key",
   resave: false,
   saveUninitialized: false,
   cookie: {
     maxAge: 24 * 60 * 60 * 1000,
-    secure: false,
+    secure: isProduction,
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: isProduction ? "none" : "lax",
   },
   store: MongoStore.create({
     mongoUrl: process.env.MONGO_URI,
@@ -353,13 +364,12 @@ function scheduleDailySlotMaintenance() {
 // Middleware
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:5174",
-      "http://localhost:5175",
-      "http://localhost:8080",
-      "http://localhost:8082",
-    ],
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true,
   })
 );
@@ -414,7 +424,6 @@ app.use(labSlotRoutes);
 app.use("/api/test-types", require("../../server/src/routes/TestManagement/testTypeRoutes"));
 app.use("/api/test-results", require("../../server/src/routes/TestManagement/testResultRoutes"));
 
-
 // Error handler
 app.use(errorMiddleware);
 
@@ -430,6 +439,7 @@ const PORT = process.env.PORT || 8081;
     console.log("Mounted /api/auth");
     console.log("Mounted /api/admin/auth");
     console.log("Mounted /api/admin/doctors");
+    console.log("Allowed origins:", allowedOrigins);
 
     await runSlotMaintenance();
     scheduleDailySlotMaintenance();
