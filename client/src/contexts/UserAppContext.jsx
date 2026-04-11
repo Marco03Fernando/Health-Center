@@ -37,6 +37,14 @@ export const UserAppProvider = ({ children }) => {
 
   useEffect(() => {
     const initAuth = async () => {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        setUser(null);
+        setIsAuthLoading(false);
+        return;
+      }
+
       try {
         const data = await userGetCurrentUser();
         if (data?.user) {
@@ -46,6 +54,8 @@ export const UserAppProvider = ({ children }) => {
         }
       } catch {
         setUser(null);
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
       } finally {
         setIsAuthLoading(false);
       }
@@ -60,7 +70,7 @@ export const UserAppProvider = ({ children }) => {
 
       if (data?.user) {
         setUser(mapAuthToAppUser(data.user));
-        return data; // changed from true -> full response so caller can inspect role
+        return data;
       }
 
       return false;
@@ -94,7 +104,7 @@ export const UserAppProvider = ({ children }) => {
       setUser(null);
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-       window.location.replace("/");
+      window.location.replace("/");
     }
   };
 

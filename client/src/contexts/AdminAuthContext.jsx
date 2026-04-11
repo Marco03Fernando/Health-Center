@@ -34,11 +34,20 @@ export function AdminAuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshAuth = async () => {
+    const token = localStorage.getItem("admin_token");
+
+    if (!token) {
+      setAdmin(null);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const data = await adminGetCurrentUser();
       setAdmin(normalizeAdmin(data));
     } catch {
       setAdmin(null);
+      localStorage.removeItem("admin_token");
     } finally {
       setIsLoading(false);
     }
@@ -73,8 +82,8 @@ export function AdminAuthProvider({ children }) {
       // even if backend logout fails, clear client auth
     } finally {
       setAdmin(null);
-      localStorage.removeItem("adminToken");
-      sessionStorage.removeItem("adminToken");
+      localStorage.removeItem("admin_token");
+      sessionStorage.removeItem("admin_token");
     }
   };
 
