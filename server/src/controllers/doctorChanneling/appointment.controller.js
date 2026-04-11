@@ -97,22 +97,21 @@ async function create(req, res, next) {
 
     setImmediate(async () => {
       try {
-        await sendAppointmentBookedEmail({
-          userEmail: populated?.userId?.email || patient?.email || "",
-          userName: populated?.userId?.fullName || patient?.fullName || "",
-          doctorName: populated?.doctorId?.name || doctor?.name || "",
-          specialization:
-            populated?.doctorId?.specialization || doctor?.specialization || "",
-          centerName: populated?.centerId?.name || "",
-          appointmentDate: populated?.slotId?.date || "",
-          startTime: populated?.slotId?.startTime || "",
-          endTime: populated?.slotId?.endTime || "",
-          note: populated?.note || "",
-          fee:
-            populated?.doctorId?.fee != null
-              ? populated.doctorId.fee
-              : doctor?.fee ?? "",
-        });
+       console.log("📧 Calling sendAppointmentBookedEmail now...");
+await sendAppointmentBookedEmail({
+  userEmail: user.email,
+  userName: user.fullName,
+  doctorName: doctor.name,
+  specialization: doctor.specialization,
+  centerName: center.name,
+  appointmentDate: appointment.date,
+  startTime: appointment.startTime,
+  endTime: appointment.endTime,
+  note: appointment.note,
+  fee: appointment.fee,
+  appointmentUrl: `https://your-frontend-url.com/appointments/${appointment._id}`,
+});
+console.log("📧 sendAppointmentBookedEmail finished");
       } catch (emailErr) {
         console.error("Appointment booking email send failed:", emailErr.message);
       }
