@@ -31,17 +31,16 @@ Health Center is a domain-specific healthcare management application designed to
 - Role-based access control and administrative tools
 - Integration with third-party services (e.g., payment gateways, SMS/email providers, external health APIs)
 
-Key capabilities include CRUD operations for all core resources, JWT-based authentication, role-aware authorization, server-side validation and error handling, pagination/filtering/search, and a test suite for unit and integration tests.
+Key capabilities include CRUD operations for all core resources, JWT-based authentication, role-aware authorization, server-side validation and error handling, pagination/filtering/search, backend unit + integration tests (Jest + Supertest), and frontend component tests (React Testing Library).
 
 ## Tech Stack
 
-- Backend: Node.js, Express.js, MongoDB (Mongoose)
-- Frontend: React (Vite), Context API (or Redux as an option)
-- Authentication: JSON Web Tokens (JWT)
-- Styling: Tailwind CSS (or Bootstrap depending on client config)
-- Testing: Jest, Supertest (backend), React Testing Library (frontend)
-- Dev tooling: ESLint, Prettier, Husky (optional), Vite (frontend)
-- API: Docementation Postman collection for API exploration
+- **Backend:** Node.js, Express.js, MongoDB (Mongoose)
+- **Frontend:** React 18 (Vite), Tailwind CSS, Shadcn/Radix UI, React Router v6
+- **Authentication:** JSON Web Tokens (JWT) + Express sessions (connect-mongo)
+- **Testing:** Jest + Supertest + mongodb-memory-server (backend); Jest + React Testing Library (frontend)
+- **Dev tooling:** Nodemon, Vite, ESLint
+- **API docs:** Postman collection at `server/postman/HealthCenter.postman_collection.json`
 
 ## System Architecture
 
@@ -87,12 +86,13 @@ npm install
 # copy or create .env (see .env.example)
 ```
 
-Environment variables (example, do NOT commit secrets):
+Environment variables (create a `.env` in `server/`, do **not** commit secrets):
 
-- `MONGO_URI` — MongoDB connection string
+- `MONGO_URI` — MongoDB Atlas connection string
 - `JWT_SECRET` — JWT signing secret
-- `PORT` — Backend port (e.g., 4000)
-- `EMAIL_API_KEY`, `SMS_API_KEY` — Third-party provider keys (optional)
+- `SESSION_SECRET` — Express session secret
+- `PORT` — Backend port (defaults to **8081**)
+- `CLIENT_URL` — Frontend origin for CORS (e.g., `http://localhost:5173`)
 
 Run backend (development):
 
@@ -122,8 +122,8 @@ Open the frontend in the browser (Vite dev): http://localhost:8080
 	- [Test Management API](server/docs/test_management_api_README.md)
 	- [Auth API](server/docs/auth_api_README.md)
 
--- Postman collection (import into Postman or run with Newman):
-	- [HealthCenter.postman_collection.json](server/postman/HealthCenter.postman_collection.json)
+Postman collection (import into Postman or run with Newman):
+- [HealthCenter.postman_collection.json](server/postman/HealthCenter.postman_collection.json)
 
 Quick import / run (optional):
 
@@ -160,13 +160,15 @@ Frontend setup
 4. Deploy and verify the site loads and communicates with the backend.
 
 Environment variables
-- `MONGO_URI` — MongoDB connection string (secret)
-- `JWT_SECRET` — JWT signing secret (secret)
-- `PORT` — Backend port (optional; host may override)
-- `VITE_API_BASE_URL` — Frontend build-time API base URL
-- `EMAIL_PROVIDER_API_KEY` — (optional) third-party email service key
-- `SMS_PROVIDER_API_KEY` — (optional) SMS service key
-- `TEST_MONGO_URI` — Test DB connection string (CI)
+
+| Variable | Used by | Notes |
+|----------|---------|-------|
+| `MONGO_URI` | `server/src/config/db.js` | MongoDB Atlas URI |
+| `JWT_SECRET` | `src/middlewares/auth.middleware.js` | JWT signing secret |
+| `SESSION_SECRET` | `src/server.js` | Express session secret |
+| `PORT` | `src/server.js` | Defaults to 8081 |
+| `CLIENT_URL` | `src/server.js` (CORS) | Deployed frontend origin |
+| `VITE_API_URL` | `client/src/config/api.ts` | Backend base URL for the frontend |
 
 Live URLs
 - Backend API: https://api.health-center.example.com (example placeholder)
@@ -187,14 +189,44 @@ Deployment evidence and screenshots
 
 ## Testing Instructions (summary)
 
-- Unit tests: run the backend Jest suite (`server`); use `npm test` and `npm run test:watch` for development.
-- Integration tests: run Supertest-based tests against a dedicated test DB. Set `TEST_MONGO_URI` and `NODE_ENV=test` before running. Full details: [docs/TESTING_INSTRUCTIONS.md](docs/TESTING_INSTRUCTIONS.md).
-- Performance testing: use Artillery (or k6/JMeter) against a staging endpoint. See `docs/TESTING_INSTRUCTIONS.md` for examples and recommended scripts.
+We wrote tests for both the backend and the frontend.
 
-Link to full testing report and commands: [docs/TESTING_INSTRUCTIONS.md](docs/TESTING_INSTRUCTIONS.md)
+**Backend integration tests** — run from the `server/` folder:
+
+```bash
+cd server
+npm install
+npm test
+```
+
+The backend has two layers of tests, both picked up by `npm test`:
+- **Unit tests** colocated in `server/src/` (controllers and routes) — each test mocks all external dependencies and tests one module in isolation. 27 test files covering all controllers and route handlers across appointments, auth, doctor channeling, pharmacy, and test management.
+- **Integration tests** in `server/tests/` — spin up an in-memory MongoDB replica set and hit real Express routes via Supertest end-to-end. 4 test files covering appointment booking/slots, diagnostic tests, medication inventory, and pharmacy orders.
+
+Results: **31 suites, 317 tests — all passing**.
+
+To generate an HTML coverage report:
+
+```bash
+npm run test:coverage
+# open server/coverage/index.html in a browser
+```
+
+**Frontend** — run from the `client/` folder:
+
+```bash
+cd client
+npm install
+npm test
+```
+
+Frontend tests are colocated with their source files and use Jest + React Testing Library. We cover all components, UI primitives, pages (all roles), layouts, routes, hooks, and lib utilities — **127 suites, 132 tests — all passing**.
+
+Full testing details: [docs/TESTING_INSTRUCTIONS.md](docs/TESTING_INSTRUCTIONS.md)
 
 ### Coverage reports
 
-- Backend (coverage report): [server/coverage/index.html](server/coverage/index.html)
-- Frontend (coverage report): placeholder — see `docs/coverage/frontend-coverage-placeholder.txt`
+- Backend: [server/coverage/index.html](server/coverage/index.html) (generated with `npm run test:coverage` in `server/`)
+- Frontend: run `npm test` in `client/` — all 132 tests pass
+
 
