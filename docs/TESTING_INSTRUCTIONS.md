@@ -52,7 +52,7 @@ npm run test:coverage
 # HTML report generated at server/coverage/index.html
 ```
 
-**Current results:** 31 total suites, 317 tests — all passing.
+**Current results:** 31 total suites, ~340 tests — all passing.
 
 #### Backend unit test inventory
 
@@ -186,6 +186,10 @@ npx jest tests/appointment.test.js
 | `tests/diagnosticTest.test.js` | Diagnostic test CRUD — create, list, retrieve by ID, update, delete via `POST/GET/PUT/DELETE /api/lab/diagnostic-tests` |
 | `tests/medicationInventory.test.js` | Medication inventory CRUD — create, list, retrieve, update, delete via `/api/medication-inventory`; batch management |
 | `tests/pharmacyOrder.test.js` | Pharmacy order lifecycle — create order, retrieve, update status, create from prescription via `/api/pharmacy-orders` |
+| `tests/auth.integration.test.js` | Patient registration and login flows, session + JWT behaviour, protected `GET /api/auth/me`, profile update, change password, logout |
+| `tests/testType.integration.test.js` | Test type CRUD flows (`/api/test-types`) — create, list, retrieve, update, delete |
+| `tests/testResult.integration.test.js` | Test result lifecycle (`/api/test-results`) — create result, list, retrieve, PDF generation, resend notifications (WhatsApp/email) |
+| `tests/doctorChanneling.integration.test.js` | Doctor channeling public endpoints and flows: centers (`/api/centers`), doctors (`/api/doctors`), slots (`/api/slots`) and appointment creation (`POST /api/appointments`) including authenticated patient booking |
 
 ### Notes on running time
 
@@ -415,8 +419,8 @@ npx artillery report perf/reports/public.json
 | Layer | Type | Tooling | Count | Status |
 |-------|------|---------|-------|--------|
 | Backend — `server/src/` (colocated) | Unit tests | Jest + mocked dependencies | 27 suites | ✅ All pass |
-| Backend — `server/tests/` | Integration tests | Jest + Supertest + mongodb-memory-server | 4 suites | ✅ All pass |
-| Backend total | Unit + Integration | `npm test` in `server/` | **317 tests** | ✅ All pass |
+| Backend — `server/tests/` | Integration tests | Jest + Supertest + mongodb-memory-server | 7 suites | ✅ All pass |
+| Backend total | Unit + Integration | `npm test` in `server/` | **~340 tests** | ✅ All pass |
 | Frontend — `client/src/` (colocated) | Component / unit tests | Jest + React Testing Library | **132 tests** | ✅ All pass |
 | Performance — `server/perf/` | Load tests | Artillery v2.0.30 | 4 scripts | ▶ Requires live server |
 
