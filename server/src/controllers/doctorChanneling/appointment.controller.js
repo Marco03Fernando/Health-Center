@@ -99,6 +99,11 @@ async function create(req, res, next) {
       try {
         console.log("📧 Calling sendAppointmentBookedEmail now...");
 
+        const clientUrl = (process.env.CLIENT_URL || "").replace(/\/+$/, "");
+        const appointmentUrl = clientUrl
+          ? `${clientUrl}/appointments/${created._id}`
+          : "";
+
         await sendAppointmentBookedEmail({
           userEmail: patient.email,
           userName: patient.fullName,
@@ -114,7 +119,7 @@ async function create(req, res, next) {
             populated?.payment?.amount != null
               ? populated.payment.amount
               : doctor.fee,
-          appointmentUrl: `https://your-frontend-url.com/appointments/${created._id}`,
+          appointmentUrl,
         });
 
         console.log("📧 sendAppointmentBookedEmail finished");
