@@ -31,14 +31,14 @@ Health Center is a domain-specific healthcare management application designed to
 - Role-based access control and administrative tools
 - Integration with third-party services (e.g., payment gateways, SMS/email providers, external health APIs)
 
-Key capabilities include CRUD operations for all core resources, JWT-based authentication, role-aware authorization, server-side validation and error handling, pagination/filtering/search, backend unit + integration tests (Jest + Supertest), and frontend component tests (React Testing Library).
+Key capabilities include CRUD operations for all core resources, JWT-based authentication, role-aware authorization, server-side validation and error handling, pagination/filtering/search, backend unit + integration tests (Jest + Supertest), frontend component tests (React Testing Library), and performance load tests (Artillery).
 
 ## Tech Stack
 
 - **Backend:** Node.js, Express.js, MongoDB (Mongoose)
 - **Frontend:** React 18 (Vite), Tailwind CSS, Shadcn/Radix UI, React Router v6
 - **Authentication:** JSON Web Tokens (JWT) + Express sessions (connect-mongo)
-- **Testing:** Jest + Supertest + mongodb-memory-server (backend); Jest + React Testing Library (frontend)
+- **Testing:** Jest + Supertest + mongodb-memory-server (backend); Jest + React Testing Library (frontend); Artillery (performance)
 - **Dev tooling:** Nodemon, Vite, ESLint
 - **API docs:** Postman collection at `server/postman/HealthCenter.postman_collection.json`
 
@@ -189,44 +189,15 @@ Deployment evidence and screenshots
 
 ## Testing Instructions (summary)
 
-We wrote tests for both the backend and the frontend.
+> [!IMPORTANT]
+> **For full setup, commands, and environment configuration details — see [docs/TESTING_INSTRUCTIONS.md](docs/TESTING_INSTRUCTIONS.md).**
 
-**Backend integration tests** — run from the `server/` folder:
-
-```bash
-cd server
-npm install
-npm test
-```
-
-The backend has two layers of tests, both picked up by `npm test`:
-- **Unit tests** colocated in `server/src/` (controllers and routes) — each test mocks all external dependencies and tests one module in isolation. 27 test files covering all controllers and route handlers across appointments, auth, doctor channeling, pharmacy, and test management.
-- **Integration tests** in `server/tests/` — spin up an in-memory MongoDB replica set and hit real Express routes via Supertest end-to-end. 4 test files covering appointment booking/slots, diagnostic tests, medication inventory, and pharmacy orders.
-
-Results: **31 suites, 317 tests — all passing**.
-
-To generate an HTML coverage report:
-
-```bash
-npm run test:coverage
-# open server/coverage/index.html in a browser
-```
-
-**Frontend** — run from the `client/` folder:
-
-```bash
-cd client
-npm install
-npm test
-```
-
-Frontend tests are colocated with their source files and use Jest + React Testing Library. We cover all components, UI primitives, pages (all roles), layouts, routes, hooks, and lib utilities — **127 suites, 132 tests — all passing**.
-
-Full testing details: [docs/TESTING_INSTRUCTIONS.md](docs/TESTING_INSTRUCTIONS.md)
-
-### Coverage reports
-
-- Backend: [server/coverage/index.html](server/coverage/index.html) (generated with `npm run test:coverage` in `server/`)
-- Frontend: run `npm test` in `client/` — all 132 tests pass
+| Layer | Type | Tooling | Count | Status |
+|-------|------|---------|-------|--------|
+| Backend — `server/src/` (colocated) | Unit tests | Jest + mocked dependencies | 27 suites | ✅ All pass |
+| Backend — `server/tests/` | Integration tests | Jest + Supertest + mongodb-memory-server | 4 suites | ✅ All pass |
+| **Backend total** | Unit + Integration | `npm test` in `server/` | **317 tests** | ✅ All pass |
+| Frontend — `client/src/` (colocated) | Component / unit tests | Jest + React Testing Library | **132 tests** | ✅ All pass |
+| Performance — `server/perf/` | Load tests | Artillery v2.0.30 | 4 scripts | ▶ Requires live server |
 
 

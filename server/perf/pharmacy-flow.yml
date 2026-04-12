@@ -1,0 +1,356 @@
+# Performance test — Pharmacy + Doctor + Lab management endpoints
+#
+# Covers ALL remaining endpoints not in public-endpoints.yml or appointment-flow.yml:
+#
+#  Doctors (public + admin):
+#   GET    /api/doctors                      — list doctors (public)
+#   GET    /api/doctors/:id                  — get single doctor (public)
+#   GET    /api/doctors/me                   — logged-in doctor profile (auth)
+#   POST   /api/admin/doctors                — create doctor (admin auth)
+#   GET    /api/admin/doctors                — list doctors as admin (auth)
+#   GET    /api/admin/doctors/:id            — get doctor as admin (auth)
+#   PATCH  /api/admin/doctors/:id            — update doctor (auth)
+#   PATCH  /api/admin/doctors/:id/active     — toggle active (auth)
+#
+#  Centers (public + admin):
+#   GET    /api/centers                      — list centers (public)
+#   GET    /api/centers/featured             — featured centers (public)
+#   GET    /api/centers/admin/all            — admin all centers (auth)
+#   POST   /api/centers/admin               — create center (auth)
+#
+#  Prescriptions (auth-guarded):
+#   GET    /api/prescriptions               — list (auth)
+#   POST   /api/prescriptions               — create (doctor auth)
+#   GET    /api/prescriptions/:id           — get one (auth)
+#   GET    /api/prescriptions/:id/pdf       — download PDF (auth)
+#   PATCH  /api/prescriptions/:id/dispense  — dispense (pharmacy auth)
+#
+#  Medication inventory (public GET, auth-guarded write):
+#   GET    /api/medication-inventory        — list (public)
+#   GET    /api/medication-inventory/:id    — get one (public)
+#   POST   /api/medication-inventory        — create (pharmacy auth)
+#   PUT    /api/medication-inventory/:id    — update (pharmacy auth)
+#   DELETE /api/medication-inventory/:id    — delete (pharmacy auth)
+#
+#  Pharmacy orders (public GET, auth-guarded write):
+#   GET    /api/pharmacy-orders             — list orders (public)
+#   GET    /api/pharmacy-orders/:id         — get order (public)
+#   POST   /api/pharmacy-orders             — create order (pharmacy auth)
+#   POST   /api/pharmacy-orders/from-prescription — order from prescription (auth)
+#   PUT    /api/pharmacy-orders/:id         — update order (pharmacy auth)
+#
+#  Diagnostic tests (all public in current setup):
+#   GET    /api/lab/diagnostic-tests        — list
+#   GET    /api/lab/diagnostic-tests/:id    — get one
+#   POST   /api/lab/diagnostic-tests        — create
+#   PUT    /api/lab/diagnostic-tests/:id    — update
+#   DELETE /api/lab/diagnostic-tests/:id    — delete
+#
+#  Test types / results:
+#   GET    /api/test-types                        — list test types
+#   GET    /api/test-types/:id                    — get by id
+#   POST   /api/test-types                        — create
+#   PUT    /api/test-types/:id                    — update
+#   DELETE /api/test-types/:id                    — delete
+#   GET    /api/test-results                      — list results
+#   GET    /api/test-results/:id                  — get by id
+#   GET    /api/test-results/patient/:patientId   — patient results
+#   POST   /api/test-results                      — create result
+#   PUT    /api/test-results/:id                  — update result
+#   DELETE /api/test-results/:id                  — delete result
+#   GET    /api/test-results/:id/pdf              — download PDF
+#
+# Prerequisites: server running at http://localhost:8081
+# Run: npm run perf:pharmacy  (from server/)
+
+config:
+  target: "http://localhost:8081"
+  phases:
+    - duration: 20
+      arrivalRate: 1
+      rampTo: 10
+      name: "Warm-up"
+    - duration: 60
+      arrivalRate: 10
+      name: "Sustained load"
+    - duration: 20
+      arrivalRate: 20
+      name: "Peak burst"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+  ensure:
+    p99: 2000
+
+scenarios:
+  # ── Doctors (public) ──────────────────────────────────────────────────────
+
+  - name: "List doctors"
+    weight: 8
+    flow:
+      - get:
+          url: "/api/doctors"
+          expect:
+            - statusCode: 200
+
+  - name: "Get single doctor (unknown id — expect 404)"
+    weight: 4
+    flow:
+      - get:
+          url: "/api/doctors/000000000000000000000001"
+          expect:
+            - statusCode:
+                - 200
+                - 404
+
+  - name: "GET /api/doctors/me without token (expect 401)"
+    weight: 2
+    flow:
+      - get:
+          url: "/api/doctors/me"
+          expect:
+            - statusCode: 401
+
+  - name: "GET /api/admin/doctors without token (expect 401/403)"
+    weight: 2
+    flow:
+      - get:
+          url: "/api/admin/doctors"
+          expect:
+            - statusCode:
+                - 401
+                - 403
+
+  # ── Centers ───────────────────────────────────────────────────────────────
+
+  - name: "List centers"
+    weight: 6
+    flow:
+      - get:
+          url: "/api/centers"
+          expect:
+            - statusCode: 200
+
+  - name: "List featured centers"
+    weight: 4
+    flow:
+      - get:
+          url: "/api/centers/featured"
+          expect:
+            - statusCode: 200
+
+  - name: "GET /api/centers/admin/all without token (expect 401/403)"
+    weight: 2
+    flow:
+      - get:
+          url: "/api/centers/admin/all"
+          expect:
+            - statusCode:
+                - 401
+                - 403
+
+  # ── Prescriptions (auth-guarded) ──────────────────────────────────────────
+
+  - name: "GET /api/prescriptions without token (expect 401)"
+    weight: 4
+    flow:
+      - get:
+          url: "/api/prescriptions"
+          expect:
+            - statusCode: 401
+
+  - name: "POST /api/prescriptions without token (expect 401)"
+    weight: 2
+    flow:
+      - post:
+          url: "/api/prescriptions"
+          json:
+            patientId: "000000000000000000000001"
+            medications: []
+          expect:
+            - statusCode: 401
+
+  - name: "GET /api/prescriptions/:id without token (expect 401)"
+    weight: 2
+    flow:
+      - get:
+          url: "/api/prescriptions/000000000000000000000001"
+          expect:
+            - statusCode: 401
+
+  # ── Medication inventory ──────────────────────────────────────────────────
+
+  - name: "List medications"
+    weight: 6
+    flow:
+      - get:
+          url: "/api/medication-inventory"
+          expect:
+            - statusCode: 200
+
+  - name: "Get single medication (unknown id — expect 404)"
+    weight: 4
+    flow:
+      - get:
+          url: "/api/medication-inventory/000000000000000000000001"
+          expect:
+            - statusCode:
+                - 200
+                - 404
+
+  - name: "POST /api/medication-inventory without token (expect 401)"
+    weight: 2
+    flow:
+      - post:
+          url: "/api/medication-inventory"
+          json:
+            name: "Paracetamol"
+            form: "tablet"
+          expect:
+            - statusCode: 401
+
+  # ── Pharmacy orders ───────────────────────────────────────────────────────
+
+  - name: "List pharmacy orders"
+    weight: 6
+    flow:
+      - get:
+          url: "/api/pharmacy-orders"
+          expect:
+            - statusCode: 200
+
+  - name: "Get single pharmacy order (unknown id — expect 404)"
+    weight: 4
+    flow:
+      - get:
+          url: "/api/pharmacy-orders/000000000000000000000001"
+          expect:
+            - statusCode:
+                - 200
+                - 404
+
+  - name: "POST /api/pharmacy-orders without token (expect 401)"
+    weight: 2
+    flow:
+      - post:
+          url: "/api/pharmacy-orders"
+          json:
+            items: []
+          expect:
+            - statusCode: 401
+
+  - name: "POST /api/pharmacy-orders/from-prescription without token (expect 401)"
+    weight: 2
+    flow:
+      - post:
+          url: "/api/pharmacy-orders/from-prescription"
+          json:
+            prescriptionId: "000000000000000000000001"
+          expect:
+            - statusCode: 401
+
+  # ── Diagnostic tests ──────────────────────────────────────────────────────
+
+  - name: "List diagnostic tests"
+    weight: 6
+    flow:
+      - get:
+          url: "/api/lab/diagnostic-tests"
+          expect:
+            - statusCode: 200
+
+  - name: "Get single diagnostic test (unknown id — expect 404)"
+    weight: 3
+    flow:
+      - get:
+          url: "/api/lab/diagnostic-tests/000000000000000000000001"
+          expect:
+            - statusCode:
+                - 200
+                - 404
+
+  - name: "POST /api/lab/diagnostic-tests (no body — expect 400)"
+    weight: 2
+    flow:
+      - post:
+          url: "/api/lab/diagnostic-tests"
+          json: {}
+          expect:
+            - statusCode:
+                - 400
+                - 422
+                - 500
+
+  # ── Test types ────────────────────────────────────────────────────────────
+
+  - name: "List test types"
+    weight: 5
+    flow:
+      - get:
+          url: "/api/test-types"
+          expect:
+            - statusCode: 200
+
+  - name: "Get single test type (unknown id — expect 404)"
+    weight: 3
+    flow:
+      - get:
+          url: "/api/test-types/000000000000000000000001"
+          expect:
+            - statusCode:
+                - 200
+                - 404
+
+  - name: "POST /api/test-types (no body — expect 400/500)"
+    weight: 2
+    flow:
+      - post:
+          url: "/api/test-types"
+          json: {}
+          expect:
+            - statusCode:
+                - 400
+                - 422
+                - 500
+
+  # ── Test results ──────────────────────────────────────────────────────────
+
+  - name: "List test results"
+    weight: 5
+    flow:
+      - get:
+          url: "/api/test-results"
+          expect:
+            - statusCode: 200
+
+  - name: "Get single test result (unknown id — expect 404)"
+    weight: 3
+    flow:
+      - get:
+          url: "/api/test-results/000000000000000000000001"
+          expect:
+            - statusCode:
+                - 200
+                - 404
+
+  - name: "Get test results by patient (unknown — expect 200/404)"
+    weight: 3
+    flow:
+      - get:
+          url: "/api/test-results/patient/000000000000000000000001"
+          expect:
+            - statusCode:
+                - 200
+                - 404
+
+  - name: "POST /api/test-results (no body — expect 400/500)"
+    weight: 2
+    flow:
+      - post:
+          url: "/api/test-results"
+          json: {}
+          expect:
+            - statusCode:
+                - 400
+                - 422
+                - 500

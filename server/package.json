@@ -7,7 +7,12 @@
     "test": "jest --runInBand",
     "test:coverage": "jest --coverage --runInBand",
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "perf": "artillery run perf/public-endpoints.yml",
+    "perf:auth": "artillery run perf/auth-flow.yml",
+    "perf:appointments": "artillery run perf/appointment-flow.yml",
+    "perf:pharmacy": "artillery run perf/pharmacy-flow.yml",
+    "perf:all": "artillery run perf/public-endpoints.yml && artillery run perf/auth-flow.yml && artillery run perf/appointment-flow.yml && artillery run perf/pharmacy-flow.yml"
   },
   "keywords": [],
   "author": "",
@@ -29,6 +34,7 @@
     "twilio": "^5.13.1"
   },
   "devDependencies": {
+    "artillery": "^2.0.30",
     "jest": "^29.6.1",
     "mongodb-memory-server": "^11.0.1",
     "nodemon": "^3.1.1",

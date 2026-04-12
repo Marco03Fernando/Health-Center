@@ -1,0 +1,145 @@
+# Performance test — Authentication flows (User + Admin)
+#
+# Covers all auth endpoints:
+#   POST /api/auth/register          — patient registration
+#   POST /api/auth/login             — patient login
+#   POST /api/auth/logout            — patient logout
+#   GET  /api/auth/me                — get own profile (bearer token)
+#   PATCH /api/auth/me               — update profile (bearer token)
+#   POST /api/admin/auth/login       — admin/center-admin/lab-tech login
+#   POST /api/admin/auth/logout      — admin logout
+#   GET  /api/admin/auth/me          — get admin profile (bearer token)
+#
+# Unauthenticated calls to protected endpoints expect 401 — these are
+# still valid performance test cases (they exercise auth middleware).
+#
+# Prerequisites: server running at http://localhost:8081
+# Run: npm run perf:auth  (from server/)
+
+config:
+  target: "http://localhost:8081"
+  phases:
+    - duration: 20
+      arrivalRate: 1
+      rampTo: 5
+      name: "Warm-up"
+    - duration: 60
+      arrivalRate: 5
+      name: "Sustained load"
+    - duration: 20
+      arrivalRate: 15
+      name: "Peak"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+  ensure:
+    p99: 2000
+
+scenarios:
+  # ── Patient auth ──────────────────────────────────────────────────────────
+
+  - name: "Patient register + login + get profile"
+    weight: 30
+    flow:
+      # Register a new unique patient each VU iteration
+      - post:
+          url: "/api/auth/register"
+          json:
+            fullName: "Perf User"
+            email: "perf_{{ $randomNumber(100000, 999999) }}@healthtest.local"
+            password: "Test@1234"
+            phone: "07{{ $randomNumber(10000000, 99999999) }}"
+          capture:
+            - json: "$.token"
+              as: "userToken"
+          expect:
+            - statusCode:
+                - 200
+                - 201
+      # Fetch own profile with the token just obtained
+      - get:
+          url: "/api/auth/me"
+          headers:
+            Authorization: "Bearer {{ userToken }}"
+          expect:
+            - statusCode:
+                - 200
+                - 401
+
+  - name: "Patient login (no token — expect 400/401)"
+    weight: 15
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "unknown@healthtest.local"
+            password: "wrongpassword"
+          expect:
+            - statusCode:
+                - 400
+                - 401
+                - 404
+
+  - name: "Patient GET /me without token (expect 401)"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/auth/me"
+          expect:
+            - statusCode: 401
+
+  - name: "Patient PATCH /me without token (expect 401)"
+    weight: 5
+    flow:
+      - patch:
+          url: "/api/auth/me"
+          json:
+            fullName: "Updated Name"
+          expect:
+            - statusCode: 401
+
+  - name: "Patient logout"
+    weight: 5
+    flow:
+      - post:
+          url: "/api/auth/logout"
+          expect:
+            - statusCode:
+                - 200
+                - 204
+
+  # ── Admin auth ────────────────────────────────────────────────────────────
+
+  - name: "Admin login (invalid creds — expect 400/401)"
+    weight: 15
+    flow:
+      - post:
+          url: "/api/admin/auth/login"
+          json:
+            email: "notanadmin@healthtest.local"
+            password: "wrongpassword"
+          expect:
+            - statusCode:
+                - 400
+                - 401
+                - 404
+
+  - name: "Admin GET /me without token (expect 401/403)"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/admin/auth/me"
+          expect:
+            - statusCode:
+                - 401
+                - 403
+
+  - name: "Admin logout"
+    weight: 10
+    flow:
+      - post:
+          url: "/api/admin/auth/logout"
+          expect:
+            - statusCode:
+                - 200
+                - 204

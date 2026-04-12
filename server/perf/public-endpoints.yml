@@ -1,0 +1,136 @@
+# Performance test — Public read-only endpoints (no authentication required)
+#
+# Covers every unauthenticated GET in the API:
+#   GET /health
+#   GET /api/centers
+#   GET /api/centers/featured
+#   GET /api/doctors
+#   GET /api/lab/diagnostic-tests
+#   GET /api/medication-inventory
+#   GET /api/medication-inventory/test
+#   GET /api/pharmacy-orders
+#   GET /api/pharmacy-orders/test
+#   GET /api/slots                    (requires doctorId + date query params)
+#   GET /api/getSlots
+#   GET /api/test-types
+#   GET /api/test-results
+#
+# Prerequisites: server running at http://localhost:8081
+# Run: npm run perf  (from server/)
+
+config:
+  target: "http://localhost:8081"
+  phases:
+    - duration: 30
+      arrivalRate: 1
+      rampTo: 10
+      name: "Warm-up"
+    - duration: 60
+      arrivalRate: 10
+      name: "Sustained load"
+    - duration: 30
+      arrivalRate: 25
+      name: "Peak"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+  # Artillery will report p50/p95/p99 latency plus error rate
+  ensure:
+    p99: 2000   # p99 must be under 2 s
+
+scenarios:
+  - name: "Health check"
+    weight: 5
+    flow:
+      - get:
+          url: "/health"
+          expect:
+            - statusCode: 200
+
+  - name: "List health centers"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/centers"
+          expect:
+            - statusCode: 200
+
+  - name: "List featured centers"
+    weight: 5
+    flow:
+      - get:
+          url: "/api/centers/featured"
+          expect:
+            - statusCode: 200
+
+  - name: "List doctors"
+    weight: 15
+    flow:
+      - get:
+          url: "/api/doctors"
+          expect:
+            - statusCode: 200
+
+  - name: "List diagnostic tests"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/lab/diagnostic-tests"
+          expect:
+            - statusCode: 200
+
+  - name: "List medications"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/medication-inventory"
+          expect:
+            - statusCode: 200
+
+  - name: "Medication inventory /test route"
+    weight: 3
+    flow:
+      - get:
+          url: "/api/medication-inventory/test"
+          expect:
+            - statusCode: 200
+
+  - name: "List pharmacy orders (public)"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/pharmacy-orders"
+          expect:
+            - statusCode: 200
+
+  - name: "Pharmacy orders /test route"
+    weight: 2
+    flow:
+      - get:
+          url: "/api/pharmacy-orders/test"
+          expect:
+            - statusCode: 200
+
+  - name: "List test types"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/test-types"
+          expect:
+            - statusCode: 200
+
+  - name: "List test results"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/test-results"
+          expect:
+            - statusCode: 200
+
+  - name: "Get all appointment slots"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/getSlots"
+          expect:
+            - statusCode: 200

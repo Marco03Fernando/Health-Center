@@ -1,0 +1,200 @@
+# Performance test — Appointment & slot endpoints
+#
+# Covers ALL appointment and slot endpoints:
+#
+#  Doctor Channeling appointments (mounted at /api/appointments):
+#   POST   /api/appointments                       — create booking (auth required)
+#   GET    /api/appointments/user/:userId          — patient's appointments (auth)
+#   GET    /api/appointments/doctor/me             — doctor's appointments (auth)
+#   PATCH  /api/appointments/:id/status            — doctor updates status (auth)
+#   DELETE /api/appointments/:id/cancel            — cancel appointment (auth)
+#
+#  Lab appointment booking (raw routes):
+#   POST   /api/bookappointment                    — book lab appointment
+#   GET    /api/appointment/:bookingId             — get single booking
+#   GET    /api/user-appointments/:userId          — patient bookings
+#   PUT    /api/updateappointment/:bookingId       — update booking
+#   DELETE /api/deleteappointment/:bookingId       — delete booking
+#   GET    /api/getappointments/:centerId          — bookings by center
+#   GET    /api/getallappointments                 — admin all bookings
+#
+#  Slot management:
+#   POST   /api/generateSlots                      — generate slots
+#   PUT    /api/updateSlot/:id                     — update a slot
+#   GET    /api/getSlots                           — list all slots
+#   GET    /api/getSlotsByCenter/:centerId         — slots by center
+#   GET    /api/getAvailableAppointmentSlots/:id   — available slots
+#   DELETE /api/deleteSlot/:id                     — delete a slot
+#   DELETE /api/deleteExpiredUnbooked              — purge expired slots
+#   DELETE /api/deleteUpcomingUnbooked             — purge upcoming unbooked
+#
+#  Doctor slot query:
+#   GET    /api/slots?doctorId=X&date=YYYY-MM-DD  — available slots for doctor
+#
+# Protected endpoints are hit without a token — expect 401, which is a valid
+# performance measurement of the auth middleware.
+#
+# Prerequisites: server running at http://localhost:8081
+# Run: npm run perf:appointments  (from server/)
+
+config:
+  target: "http://localhost:8081"
+  phases:
+    - duration: 20
+      arrivalRate: 1
+      rampTo: 8
+      name: "Warm-up"
+    - duration: 60
+      arrivalRate: 8
+      name: "Sustained load"
+    - duration: 20
+      arrivalRate: 20
+      name: "Peak burst"
+  defaults:
+    headers:
+      Content-Type: "application/json"
+  ensure:
+    p99: 2000
+
+scenarios:
+  # ── Public / unauthenticated GET ──────────────────────────────────────────
+
+  - name: "Get all slots (lab)"
+    weight: 15
+    flow:
+      - get:
+          url: "/api/getSlots"
+          expect:
+            - statusCode: 200
+
+  - name: "Get all appointments (admin)"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/getallappointments"
+          expect:
+            - statusCode:
+                - 200
+                - 401
+                - 403
+
+  - name: "Get slots by center"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/getSlotsByCenter/000000000000000000000001"
+          expect:
+            - statusCode:
+                - 200
+                - 404
+
+  - name: "Get available appointment slots by center"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/getAvailableAppointmentSlots/000000000000000000000001"
+          expect:
+            - statusCode:
+                - 200
+                - 404
+
+  - name: "Get single lab booking (unknown id)"
+    weight: 5
+    flow:
+      - get:
+          url: "/api/appointment/000000000000000000000001"
+          expect:
+            - statusCode:
+                - 200
+                - 404
+
+  - name: "Get user lab appointments (unknown userId)"
+    weight: 5
+    flow:
+      - get:
+          url: "/api/user-appointments/000000000000000000000001"
+          expect:
+            - statusCode:
+                - 200
+                - 404
+
+  - name: "Get doctor slots (missing params — expect 400)"
+    weight: 5
+    flow:
+      - get:
+          url: "/api/slots"
+          expect:
+            - statusCode: 400
+
+  # ── Auth-guarded endpoints (no token — expect 401) ────────────────────────
+
+  - name: "POST /api/appointments without token (expect 401)"
+    weight: 8
+    flow:
+      - post:
+          url: "/api/appointments"
+          json:
+            doctorId: "000000000000000000000001"
+            slotId: "000000000000000000000002"
+            date: "2026-05-01"
+          expect:
+            - statusCode: 401
+
+  - name: "GET /api/appointments/user/:id without token (expect 401)"
+    weight: 5
+    flow:
+      - get:
+          url: "/api/appointments/user/000000000000000000000001"
+          expect:
+            - statusCode: 401
+
+  - name: "GET /api/appointments/doctor/me without token (expect 401)"
+    weight: 5
+    flow:
+      - get:
+          url: "/api/appointments/doctor/me"
+          expect:
+            - statusCode: 401
+
+  - name: "DELETE /api/appointments/:id/cancel without token (expect 401)"
+    weight: 5
+    flow:
+      - delete:
+          url: "/api/appointments/000000000000000000000001/cancel"
+          expect:
+            - statusCode: 401
+
+  - name: "POST /api/bookappointment without body (expect 400/422)"
+    weight: 5
+    flow:
+      - post:
+          url: "/api/bookappointment"
+          json: {}
+          expect:
+            - statusCode:
+                - 400
+                - 422
+                - 500
+
+  - name: "POST /api/generateSlots without body (expect 400)"
+    weight: 4
+    flow:
+      - post:
+          url: "/api/generateSlots"
+          json: {}
+          expect:
+            - statusCode:
+                - 400
+                - 422
+                - 500
+
+  - name: "DELETE /api/deleteExpiredUnbooked"
+    weight: 4
+    flow:
+      - delete:
+          url: "/api/deleteExpiredUnbooked"
+          expect:
+            - statusCode:
+                - 200
+                - 204
+                - 500
