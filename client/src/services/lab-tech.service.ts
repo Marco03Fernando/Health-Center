@@ -172,6 +172,63 @@ export async function getAllLabBookings() {
   return res?.data || (Array.isArray(res) ? res : []);
 }
 
+export async function downloadLabBookingSummaryReport(centerId = "all") {
+  const query = `?centerId=${encodeURIComponent(centerId)}`;
+  const response = await fetch(
+    `${import.meta.env.VITE_API_URL || "http://localhost:8081/api"}/lab-bookings-summary-report${query}`,
+    {
+      method: "GET",
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to download summary report");
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "lab-bookings-summary-report.pdf";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function downloadFilteredLabBookingsReport({
+  search = "",
+  status = "all",
+  centerId = "all",
+} = {}) {
+  const params = new URLSearchParams({
+    search,
+    status,
+    centerId,
+  });
+
+  const response = await fetch(
+    `${import.meta.env.VITE_API_URL || "http://localhost:8081/api"}/lab-bookings-filtered-report?${params.toString()}`,
+    {
+      method: "GET",
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to download filtered report");
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "filtered-lab-bookings-report.pdf";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 // PDF opening function
 
 export function openTestResultPdf(resultId) {
