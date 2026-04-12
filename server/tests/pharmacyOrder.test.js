@@ -8,6 +8,9 @@ const express = require('express');
 const { connect, disconnect, clearCollections } = require('./helpers/db');
 const PharmacyOrder = require('../src/models/pharmacy/pharmacyOrder');
 const Prescription = require('../src/models/doctorChanneling/prescription.model');
+// ensure User model is registered for Mongoose populate calls in controller
+require('../src/models/doctorChanneling/user.model');
+require('../src/models/doctorChanneling/doctor.model');
 
 // Mock the email utility to avoid external calls
 jest.mock('../src/utils/sendInvoiceEmail', () => jest.fn());
@@ -47,11 +50,13 @@ describe('Pharmacy orders integration', () => {
 
   it('POST /api/pharmacy-orders/from-prescription creates a WAITING_STOCK order', async () => {
     // create a minimal prescription required fields
+    const User = require('../src/models/doctorChanneling/user.model');
+    const user = await User.create({ fullName: 'U', email: 'u@u', phone: '1', password: 'secret' });
     const pres = await Prescription.create({
       prescriptionNo: `P-${Date.now()}`,
       centerId: new mongoose.Types.ObjectId(),
       doctorId: new mongoose.Types.ObjectId(),
-      userId: new mongoose.Types.ObjectId(),
+      userId: user._id,
       appointmentId: new mongoose.Types.ObjectId(),
       items: [{ medicineName: 'TestMed', quantity: 1 }],
     });

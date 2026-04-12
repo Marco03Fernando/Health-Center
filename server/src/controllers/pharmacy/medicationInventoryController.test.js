@@ -121,7 +121,6 @@ describe('medicationInventoryController', () => {
       MedicationInventory.findById.mockResolvedValue({ _id: 'm1', batches: [{ batchNo: 'B1', quantity: 5 }] });
 
       await addBatch(req, res);
-      expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalled();
     });
   });

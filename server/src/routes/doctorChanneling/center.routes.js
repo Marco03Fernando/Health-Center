@@ -19,10 +19,30 @@ router.get("/", getCenters);
 router.get("/featured", getFeaturedCenters);
 
 // Admin
-router.get("/admin/all", protect, allowRoles("admin", "superadmin"), getAllCentersAdmin);
-router.post("/admin", protect, allowRoles("admin", "superadmin"), createCenter);
-router.patch("/admin/:id", protect, allowRoles("admin", "superadmin"), updateCenter);
-router.patch("/admin/:id/active", protect, allowRoles("admin", "superadmin"), toggleCenterActive);
-router.patch("/admin/:id/featured", protect, allowRoles("admin", "superadmin"), toggleCenterFeatured);
+router.get(
+  "/admin/all",
+  protect,
+  allowRoles("admin", "superadmin", "center-admin"),
+  getAllCentersAdmin
+);
+router.post("/admin", protect, allowRoles("admin", "superadmin", "center-admin"), createCenter);
+router.patch(
+  "/admin/:id",
+  protect,
+  allowRoles("admin", "superadmin", "center-admin"),
+  updateCenter
+);
+router.patch(
+  "/admin/:id/active",
+  protect,
+  allowRoles("admin", "superadmin", "center-admin"),
+  toggleCenterActive
+);
+router.patch(
+  "/admin/:id/featured",
+  protect,
+  allowRoles("admin", "superadmin", "center-admin"),
+  toggleCenterFeatured
+);
 
 module.exports = router;

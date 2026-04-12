@@ -78,6 +78,9 @@ describe('pharmacyOrderController', () => {
 
       await createOrder(req, res);
 
+      // debug output for failing scenario
+      console.log('DEBUG res.status', res.status.mock.calls, 'res.json', res.json.mock.calls);
+
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalled();
       expect(sendInvoiceEmail).toHaveBeenCalled();
@@ -88,6 +91,8 @@ describe('pharmacyOrderController', () => {
       const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
       const med = { _id: 'm1', name: 'Med', strength: '10mg', batches: [{ _id: 'b1', quantity: 5, unitPrice: 5, batchNo: 'BN1', expiryDate: '2030-01-01' }], save: jest.fn().mockResolvedValue(true) };
+      // emulate mongoose subdocument `id()` helper on batches array
+      med.batches.id = function (id) { return this.find((b) => String(b._id) === String(id)); };
       MedicationInventory.findById.mockImplementation(() => ({ session: jest.fn().mockResolvedValue(med) }));
 
       PharmacyOrder.create.mockResolvedValue([{ _id: 'o2', status: 'CONFIRMED' }]);
@@ -112,7 +117,7 @@ describe('pharmacyOrderController', () => {
     it('returns 404 when prescription not found', async () => {
       const req = { body: { prescriptionId: 'p1' } };
       const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
-      Prescription.findById.mockResolvedValue(null);
+      Prescription.findById.mockReturnValueOnce({ populate: () => ({ populate: () => ({ lean: () => Promise.resolve(null) }) }) });
       await createOrderFromPrescription(req, res);
       expect(res.status).toHaveBeenCalledWith(404);
     });
@@ -121,7 +126,7 @@ describe('pharmacyOrderController', () => {
       const req = { body: { prescriptionId: 'p1' } };
       const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
       const p = { _id: 'p1', prescriptionNo: 'PR-1', items: [{ medicineName: 'X', quantity: 1 }], userId: { fullName: 'U', email: 'u@u', phone: '1' }, doctorId: { name: 'D' } };
-      Prescription.findById.mockResolvedValue(p);
+      Prescription.findById.mockReturnValueOnce({ populate: () => ({ populate: () => ({ lean: () => Promise.resolve(p) }) }) });
       PharmacyOrder.create.mockResolvedValue({ _id: 'o3' });
 
       await createOrderFromPrescription(req, res);

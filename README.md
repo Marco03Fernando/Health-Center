@@ -75,7 +75,7 @@ Follow the steps below to run the project locally.
 1. Clone the repository
 
 ```bash
-git clone https://github.com/<your-org>/health-center.git
+git clone https://github.com/Marco03Fernando/Health-Center.git
 cd health-center
 ```
 
@@ -111,7 +111,7 @@ npm install
 npm run dev
 ```
 
-Open the frontend in the browser (Vite dev): http://localhost:5173
+Open the frontend in the browser (Vite dev): http://localhost:8080
 
 ## API Documentation
 

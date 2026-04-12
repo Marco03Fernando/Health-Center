@@ -5,11 +5,36 @@ const { protect } = require("../../../middlewares/auth.middleware");
 const { allowRoles } = require("../../../middlewares/role.middleware");
 
 // Admin doctor management
-router.post("/", protect, allowRoles("admin", "superadmin"), doctorController.create);
-router.get("/", protect, allowRoles("admin", "superadmin"), doctorController.list);
-router.get("/:id", protect, allowRoles("admin", "superadmin"), doctorController.getById);
-router.patch("/:id", protect, allowRoles("admin", "superadmin"), doctorController.update);
-router.patch("/:id/active", protect, allowRoles("admin", "superadmin"), doctorController.setActive);
+router.post(
+  "/",
+  protect,
+  allowRoles("admin", "superadmin", "center-admin"),
+  doctorController.create
+);
+router.get(
+  "/",
+  protect,
+  allowRoles("admin", "superadmin", "center-admin"),
+  doctorController.list
+);
+router.get(
+  "/:id",
+  protect,
+  allowRoles("admin", "superadmin", "center-admin"),
+  doctorController.getById
+);
+router.patch(
+  "/:id",
+  protect,
+  allowRoles("admin", "superadmin", "center-admin"),
+  doctorController.update
+);
+router.patch(
+  "/:id/active",
+  protect,
+  allowRoles("admin", "superadmin", "center-admin"),
+  doctorController.setActive
+);
 
 // Manual slot maintenance
 router.post(

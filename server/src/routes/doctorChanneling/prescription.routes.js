@@ -13,7 +13,7 @@ router.get("/doctor/me", protectDoctorRoute, controller.listByDoctor);
 router.get(
   "/",
   protect,
-  allowRoles("doctor", "patient", "pharmacy", "admin", "superadmin"),
+  allowRoles("doctor", "patient", "pharmacy", "admin", "superadmin", "center-admin"),
   controller.list
 );
 
@@ -24,7 +24,7 @@ router.post("/", protect, allowRoles("doctor"), controller.create);
 router.get(
   "/:id/pdf",
   protect,
-  allowRoles("doctor", "patient", "pharmacy", "admin", "superadmin"),
+  allowRoles("doctor", "patient", "pharmacy", "admin", "superadmin", "center-admin"),
   controller.downloadPdf
 );
 
@@ -32,7 +32,7 @@ router.get(
 router.get(
   "/:id",
   protect,
-  allowRoles("doctor", "patient", "pharmacy", "admin", "superadmin"),
+  allowRoles("doctor", "patient", "pharmacy", "admin", "superadmin", "center-admin"),
   controller.getById
 );
 
