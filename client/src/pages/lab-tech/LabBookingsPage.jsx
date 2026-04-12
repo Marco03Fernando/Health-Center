@@ -4,6 +4,8 @@ import {
   getAllLabBookings,
   updateBookingStatus,
   getCenters,
+  downloadLabBookingSummaryReport,
+  downloadFilteredLabBookingsReport,
 } from "@/services/lab-tech.service";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -84,6 +86,8 @@ export default function LabBookingsPage() {
   const [centerFilter, setCenterFilter] = useState("all");
   const [cancelId, setCancelId] = useState(null);
   const [cancelling, setCancelling] = useState(false);
+  const [downloadingSummary, setDownloadingSummary] = useState(false);
+  const [downloadingFiltered, setDownloadingFiltered] = useState(false);
 
   async function fetchBookings() {
     try {
@@ -138,6 +142,34 @@ export default function LabBookingsPage() {
       setCancelId(null);
     } finally {
       setCancelling(false);
+    }
+  }
+
+  async function handleDownloadSummaryReport() {
+    try {
+      setDownloadingSummary(true);
+      setError("");
+      await downloadLabBookingSummaryReport(centerFilter);
+    } catch (err) {
+      setError(err?.message || "Failed to download summary report.");
+    } finally {
+      setDownloadingSummary(false);
+    }
+  }
+
+  async function handleDownloadFilteredReport() {
+    try {
+      setDownloadingFiltered(true);
+      setError("");
+      await downloadFilteredLabBookingsReport({
+        search,
+        status: statusFilter,
+        centerId: centerFilter,
+      });
+    } catch (err) {
+      setError(err?.message || "Failed to download filtered report.");
+    } finally {
+      setDownloadingFiltered(false);
     }
   }
 
@@ -233,6 +265,16 @@ export default function LabBookingsPage() {
         </div>
         <h1 className="mt-2 text-3xl font-bold">Lab Bookings</h1>
 
+        <div className="mt-4 flex justify-end">
+          <Button
+            variant="outline"
+            onClick={handleDownloadSummaryReport}
+            disabled={downloadingSummary}
+          >
+            {downloadingSummary ? "Downloading..." : "Download Summary Report"}
+          </Button>
+        </div>
+
         {/* COUNTERS */}
         <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-5">
           {[
@@ -297,6 +339,16 @@ export default function LabBookingsPage() {
                 {f.label}
               </Button>
             ))}
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              onClick={handleDownloadFilteredReport}
+              disabled={downloadingFiltered}
+            >
+              {downloadingFiltered ? "Downloading..." : "Download Filtered Report"}
+            </Button>
           </div>
         </CardContent>
       </Card>

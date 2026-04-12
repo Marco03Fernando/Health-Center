@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const PDFDocument = require('pdfkit');
 const AppointmentSlot = require('../../models/AppoinmentSlot');
 const Booking = require('../../models/Appoinment');
 const User = require('../../models/User');
@@ -6,6 +7,11 @@ const HealthCenter = require('../../models/HealthCenter');
 require('../../models/DiagnosticTest');
 
 const { sendBookingConfirmationEmail, sendBookingCancellationEmail, sendBookingCompletedEmail } = require("../../utils/emailService");
+
+const normalizeStatus = (status) => {
+  if (status === "CONFIRMED") return "PENDING";
+  return status;
+};
 
 async function bookAppointment(req, res) {
   const { slotId, userId, diagnosticTestId } = req.body || {};
@@ -406,6 +412,181 @@ async function getUserAppointments(req, res) {
   }
 }
 
+async function downloadLabBookingSummaryReport(req, res) {
+  try {
+    const { centerId = "all" } = req.query;
+
+    let filter = {};
+    if (centerId !== "all") {
+      filter.healthCenter = centerId;
+    }
+
+    const bookings = await Booking.find(filter)
+      .populate('user', 'fullName name email phone')
+      .populate('healthCenter', 'name location')
+      .populate('diagnosticTest', 'name price')
+      .populate('slot', 'startTime endTime slotDate')
+      .sort({ appointmentDate: -1 });
+
+    const pendingCount = bookings.filter(
+      (b) => normalizeStatus(b.appointmentStatus) === "PENDING"
+    ).length;
+
+    const undergoingCount = bookings.filter(
+      (b) => normalizeStatus(b.appointmentStatus) === "UNDERGOING"
+    ).length;
+
+    const resultPendingCount = bookings.filter(
+      (b) => normalizeStatus(b.appointmentStatus) === "RESULT_PENDING"
+    ).length;
+
+    const completedCount = bookings.filter(
+      (b) => normalizeStatus(b.appointmentStatus) === "COMPLETED"
+    ).length;
+
+    const cancelledCount = bookings.filter(
+      (b) => normalizeStatus(b.appointmentStatus) === "CANCELLED"
+    ).length;
+
+    const centerName =
+      centerId === "all"
+        ? "All Centers"
+        : bookings[0]?.healthCenter?.name || "Selected Center";
+
+    const doc = new PDFDocument({ size: "A4", margin: 50 });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="lab-bookings-summary-report.pdf"'
+    );
+
+    doc.pipe(res);
+
+    doc.fontSize(18).text("Lab Bookings Summary Report", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(12).text(`Center: ${centerName}`);
+    doc.text(`Generated At: ${new Date().toLocaleString()}`);
+    doc.moveDown();
+
+    doc.fontSize(14).text("Booking Statistics");
+    doc.moveDown(0.5);
+
+    doc.fontSize(12).text(`Pending: ${pendingCount}`);
+    doc.text(`Undergoing: ${undergoingCount}`);
+    doc.text(`Results Pending: ${resultPendingCount}`);
+    doc.text(`Completed: ${completedCount}`);
+    doc.text(`Cancelled: ${cancelledCount}`);
+    doc.text(`Total Bookings: ${bookings.length}`);
+
+    doc.end();
+  } catch (error) {
+    console.error("Summary report generation failed:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate summary report",
+      details: error.message,
+    });
+  }
+}
+
+async function downloadFilteredLabBookingsReport(req, res) {
+  try {
+    const {
+      search = "",
+      status = "all",
+      centerId = "all",
+    } = req.query;
+
+    let filter = {};
+    if (centerId !== "all") {
+      filter.healthCenter = centerId;
+    }
+
+    const bookings = await Booking.find(filter)
+      .populate('user', 'fullName name email phone')
+      .populate('healthCenter', 'name location')
+      .populate('diagnosticTest', 'name price')
+      .populate('slot', 'startTime endTime slotDate')
+      .sort({ appointmentDate: -1 });
+
+    const q = search.trim().toLowerCase();
+
+    const filtered = bookings.filter((b) => {
+      const patientName = (
+        b?.user?.fullName ||
+        b?.user?.name ||
+        ""
+      ).toLowerCase();
+
+      const testName = (
+        b?.diagnosticTest?.name ||
+        ""
+      ).toLowerCase();
+
+      const appointmentId = String(b?._id || "").toLowerCase();
+
+      const matchSearch =
+        !q ||
+        patientName.includes(q) ||
+        testName.includes(q) ||
+        appointmentId.includes(q);
+
+      const matchStatus =
+        status === "all" ||
+        normalizeStatus(b.appointmentStatus) === status;
+
+      return matchSearch && matchStatus;
+    });
+
+    const doc = new PDFDocument({ size: "A4", margin: 40 });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="filtered-lab-bookings-report.pdf"'
+    );
+
+    doc.pipe(res);
+
+    doc.fontSize(18).text("Filtered Lab Bookings Report", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(12).text(`Search: ${search || "None"}`);
+    doc.text(`Status Filter: ${status}`);
+    doc.text(`Center Filter: ${centerId}`);
+    doc.text(`Generated At: ${new Date().toLocaleString()}`);
+    doc.text(`Total Matching Bookings: ${filtered.length}`);
+    doc.moveDown();
+
+    filtered.forEach((b, index) => {
+      const patientName = b?.user?.fullName || b?.user?.name || "—";
+      const testName = b?.diagnosticTest?.name || "—";
+      const centerName = b?.healthCenter?.name || "—";
+      const bookingStatus = normalizeStatus(b?.appointmentStatus || "—");
+      const appointmentDate = b?.appointmentDate
+        ? new Date(b.appointmentDate).toLocaleDateString()
+        : "—";
+
+      doc.fontSize(12).text(`${index + 1}. Patient: ${patientName}`);
+      doc.text(`   Test: ${testName}`);
+      doc.text(`   Center: ${centerName}`);
+      doc.text(`   Appointment ID: ${b?._id || "—"}`);
+      doc.text(`   Appointment Date: ${appointmentDate}`);
+      doc.text(`   Status: ${bookingStatus}`);
+      doc.moveDown();
+    });
+
+    doc.end();
+  } catch (error) {
+    console.error("Filtered report generation failed:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate filtered bookings report",
+      details: error.message,
+    });
+  }
+}
+
 module.exports = {
   bookAppointment,
   updateAppointment,
@@ -414,4 +595,6 @@ module.exports = {
   getAllAppointmentsAdmin,
   getAppointmentById,
   getUserAppointments,
+  downloadLabBookingSummaryReport,
+  downloadFilteredLabBookingsReport,
 };
