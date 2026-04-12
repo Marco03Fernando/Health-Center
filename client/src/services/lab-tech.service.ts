@@ -1,6 +1,5 @@
 import { labTechApiFetch as apiFetch } from "@/lib/api";
 
-
 export type DiagnosticTest = {
   _id: string;
   name: string;
@@ -45,7 +44,7 @@ export async function createDiagnosticTest(data: any) {
     method: "POST",
     body: isFormData ? data : JSON.stringify(data),
     headers: isFormData
-      ? undefined // Let browser set multipart headers automatically
+      ? undefined
       : { "Content-Type": "application/json" },
   });
 
@@ -66,22 +65,19 @@ export async function deleteDiagnosticTest(id) {
   });
 }
 
-// Test Types 
+// Test Types
 
-// GET ALL (ACTIVE + INACTIVE)
 export async function getTestTypes(centerId) {
   const qs = centerId ? `?centerId=${encodeURIComponent(centerId)}` : "";
   const res = await apiFetch(`/test-types${qs}`);
   return Array.isArray(res) ? res : res?.data || [];
 }
 
-// GET SINGLE
 export async function getTestTypeById(id) {
   const res = await apiFetch(`/test-types/${id}`);
   return res?.data || res;
 }
 
-// CREATE
 export async function createTestType(data) {
   const res = await apiFetch("/test-types", {
     method: "POST",
@@ -90,7 +86,6 @@ export async function createTestType(data) {
   return res?.data || res;
 }
 
-// UPDATE
 export async function updateTestType(id, data) {
   const res = await apiFetch(`/test-types/${id}`, {
     method: "PUT",
@@ -99,7 +94,6 @@ export async function updateTestType(id, data) {
   return res?.data || res;
 }
 
-// DELETE 
 export async function deleteTestType(id) {
   await apiFetch(`/test-types/${id}`, {
     method: "DELETE",
@@ -175,9 +169,13 @@ export async function getAllLabBookings() {
 // PDF opening function
 
 export function openTestResultPdf(resultId) {
-  const baseUrl =
-    import.meta.env.VITE_API_URL ||
-    "http://localhost:8081/api";
+  const rawBaseUrl =
+    import.meta.env.VITE_API_URL || "http://localhost:8081/api";
+
+  const cleanBaseUrl = String(rawBaseUrl).replace(/\/+$/, "");
+  const baseUrl = cleanBaseUrl.endsWith("/api")
+    ? cleanBaseUrl
+    : `${cleanBaseUrl}/api`;
 
   window.open(`${baseUrl}/test-results/${resultId}/pdf`, "_blank");
 }
