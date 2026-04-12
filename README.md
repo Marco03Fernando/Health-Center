@@ -171,20 +171,26 @@ Environment variables
 | `VITE_API_URL` | `client/src/config/api.ts` | Backend base URL for the frontend |
 
 Live URLs
-- Backend API: https://api.health-center.example.com (example placeholder)
-- Frontend: https://health-center-iota.vercel.app
+- Backend API: https://health-center-project.onrender.com
+- Frontend: https://health-center-virid.vercel.app/
 
 Deployment evidence and screenshots
 
 
-### Backend console
-![Backend health check](docs/screenshots/deploy-backend.png)
-
 ### Deployed frontend screenshot
 ![Deployed frontend](docs/screenshots/deploy-frontend.png)
 
+### Backend console
+![Backend health check](docs/screenshots/deploy-backend.png)
+
 ### Build / deploy logs
-![Build logs](docs/screenshots/deploy-logs.png)
+![Build logs](docs/screenshots/deploy-log1.png)
+
+![Build logs](docs/screenshots/deploy-log2.png)
+
+![Build logs](docs/screenshots/deploy-log3.png)
+
+
 
 
 ## Testing Instructions (summary)
@@ -195,9 +201,9 @@ Deployment evidence and screenshots
 | Layer | Type | Tooling | Count | Status |
 |-------|------|---------|-------|--------|
 | Backend — `server/src/` (colocated) | Unit tests | Jest + mocked dependencies | 27 suites | ✅ All pass |
-| Backend — `server/tests/` | Integration tests | Jest + Supertest + mongodb-memory-server | 4 suites | ✅ All pass |
-| **Backend total** | Unit + Integration | `npm test` in `server/` | **317 tests** | ✅ All pass |
-| Frontend — `client/src/` (colocated) | Component / unit tests | Jest + React Testing Library | **132 tests** | ✅ All pass |
+| Backend — `server/tests/` | Integration tests | Jest + Supertest + mongodb-memory-server | 7 suites | ✅ All pass |
+| **Backend total** | Unit + Integration | `npm test` in `server/` | **~340 tests** | ✅ All pass |
+| Frontend — `client/src/` (colocated) | Component / unit tests | Jest + React Testing Library | **141 tests** | ✅ All pass |
 | Performance — `server/perf/` | Load tests | Artillery v2.0.30 | 4 scripts | ▶ Requires live server |
 
 
