@@ -44,8 +44,15 @@ function getApiBaseUrl() {
       ? String(process.env.NEXT_PUBLIC_API_URL).trim()
       : "";
 
-  if (viteUrl) return viteUrl.replace(/\/+$/, "");
-  if (nextUrl) return nextUrl.replace(/\/+$/, "");
+  if (viteUrl) {
+    const clean = viteUrl.replace(/\/+$/, "");
+    return clean.endsWith("/api") ? clean : `${clean}/api`;
+  }
+
+  if (nextUrl) {
+    const clean = nextUrl.replace(/\/+$/, "");
+    return clean.endsWith("/api") ? clean : `${clean}/api`;
+  }
 
   return "http://localhost:8081/api";
 }
