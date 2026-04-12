@@ -97,22 +97,27 @@ async function create(req, res, next) {
 
     setImmediate(async () => {
       try {
+        console.log("📧 Calling sendAppointmentBookedEmail now...");
+
         await sendAppointmentBookedEmail({
-          userEmail: populated?.userId?.email || patient?.email || "",
-          userName: populated?.userId?.fullName || patient?.fullName || "",
-          doctorName: populated?.doctorId?.name || doctor?.name || "",
+          userEmail: patient.email,
+          userName: patient.fullName,
+          doctorName: populated?.doctorId?.name || doctor.name,
           specialization:
-            populated?.doctorId?.specialization || doctor?.specialization || "",
-          centerName: populated?.centerId?.name || "",
-          appointmentDate: populated?.slotId?.date || "",
-          startTime: populated?.slotId?.startTime || "",
-          endTime: populated?.slotId?.endTime || "",
-          note: populated?.note || "",
+            populated?.doctorId?.specialization || doctor.specialization,
+          centerName: populated?.centerId?.name || "Health Center",
+          appointmentDate: populated?.slotId?.date,
+          startTime: populated?.slotId?.startTime,
+          endTime: populated?.slotId?.endTime,
+          note: populated?.note || note || "",
           fee:
-            populated?.doctorId?.fee != null
-              ? populated.doctorId.fee
-              : doctor?.fee ?? "",
+            populated?.payment?.amount != null
+              ? populated.payment.amount
+              : doctor.fee,
+          appointmentUrl: `https://your-frontend-url.com/appointments/${created._id}`,
         });
+
+        console.log("📧 sendAppointmentBookedEmail finished");
       } catch (emailErr) {
         console.error("Appointment booking email send failed:", emailErr.message);
       }
